@@ -17,10 +17,12 @@
 /samples/**/memcpy_core
 /samples/**/saxpy
 /samples/**/saxpy_core
-/samples/**/matrix_add
-/samples/**/matrix_add_core
+/samples/**/matadd
+/samples/**/matadd_core
 /samples/**/bandwidth
 /samples/**/bandwidth_core
+/samples/**/matmul
+/samples/**/matmul_core
 
 /polv-*.tar.gz
 
