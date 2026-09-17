@@ -190,7 +190,7 @@ interpreted as raw PCIe or VRAM bandwidth.
 ## Example
 
 The following POLV example adds two arrays using a Vulkan compute shader and host-coherent memory.
-The variant that utilizes device-local memory can be found under `samples/polv/vecadd.c`.
+The variant that utilizes device-local memory can be found under `samples/polv/02_vecadd/vecadd.c`.
 
 ### Compute shader
 
