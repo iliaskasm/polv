@@ -189,7 +189,8 @@ interpreted as raw PCIe or VRAM bandwidth.
 
 ## Example
 
-The following example adds two arrays using a Vulkan compute shader.
+The following POLV example adds two arrays using a Vulkan compute shader and host-coherent memory.
+The variant that utilizes device-local memory can be found under `samples/polv/vecadd.c`.
 
 ### Compute shader
 
@@ -202,17 +203,17 @@ layout(local_size_x_id = 0,
        local_size_y_id = 1,
        local_size_z_id = 2) in;
 
-layout(set = 0, binding = 0) buffer A
+layout(set = 0, binding = 0) readonly buffer A
 {
     float a[];
 };
 
-layout(set = 0, binding = 1) buffer B
+layout(set = 0, binding = 1) readonly buffer B
 {
     float b[];
 };
 
-layout(set = 0, binding = 2) buffer C
+layout(set = 0, binding = 2) writeonly buffer C
 {
     float c[];
 };
