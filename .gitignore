@@ -1,9 +1,18 @@
 *.o
+*.d
 *.so
 *.so.*
 *.a
 
+/build/
+/tests/build/
+/out/
+
 /install/
+
+/include/polv_version.h
+compile_commands.json
+.cache/
 
 /samples/**/*.spv
 
@@ -26,11 +35,6 @@
 
 /polv-*.tar.gz
 
-/build/
-/out/
-.cache/
-compile_commands.json
-
 .vscode/
 .idea/
 *.swp
@@ -39,6 +43,7 @@ compile_commands.json
 
 .DS_Store
 Thumbs.db
+desktop.ini
 
 core
 core.*
