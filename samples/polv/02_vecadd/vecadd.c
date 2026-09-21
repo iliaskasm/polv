@@ -31,7 +31,9 @@
 	polvFree(d_a); \
 	polvFree(d_b); \
 	polvFree(d_c); \
-	free(a); free(b); free(c); \
+	free(a); \
+	free(b); \
+	free(c); \
 	polvFinalize(); \
 } while (0)
 

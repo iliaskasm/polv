@@ -46,7 +46,7 @@ int main(void)
 
 	for (i = 0; i < n; ++i)
 	{
-		src[i] = (float)(i * 3);
+		src[i] = (float) (i * 3);
 		dst[i] = 0.0f;
 	}
 

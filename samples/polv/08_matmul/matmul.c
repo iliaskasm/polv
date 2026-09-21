@@ -75,7 +75,7 @@ int main(void)
 		a[i] = (float) i;
 
 	for (i = 0; i < (size_t) k * n; ++i)
-		b[i] = (float)(i + 1);
+		b[i] = (float) (i + 1);
 
 	for (i = 0; i < (size_t) m * n; ++i)
 		c[i] = 0.0f;

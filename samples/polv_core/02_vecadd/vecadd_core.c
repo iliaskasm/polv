@@ -56,7 +56,7 @@ int main(void)
 	for (i = 0; i < n; ++i) 
 	{
 		a[i] = (float) i;
-		b[i] = (float)(2 * i);
+		b[i] = (float) (2 * i);
 		c[i] = 0.0f;
 	}
 

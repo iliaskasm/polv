@@ -65,7 +65,7 @@ static int parse_positive_size(const char *text, size_t *value)
 	parsed = strtoull(text, &end, 10);
 
 	if (errno != 0 || end == text || *end != '\0' || parsed == 0 ||
-	    parsed > (unsigned long long)SIZE_MAX)
+	    parsed > (unsigned long long) SIZE_MAX)
 		return 0;
 
 	*value = (size_t) parsed;
@@ -245,7 +245,7 @@ int main(int argc, char **argv)
 	host_dst = (unsigned char *) smalloc(bytes);
 
 	for (i = 0; i < bytes; ++i)
-		host_src[i] = (unsigned char)(i * 131u + 17u);
+		host_src[i] = (unsigned char) (i * 131u + 17u);
 
 	memset(host_dst, 0, bytes);
 

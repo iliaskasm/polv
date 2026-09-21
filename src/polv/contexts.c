@@ -72,7 +72,7 @@ static POLVResult polv_contexts_create(POLVCoreDevice *dev, POLVCoreContext **co
 		return polv_status_from_core(res);
 
 	new_contexts = (polv_contexts_entry *) realloc(
-		contexts, (size_t)(num_contexts + 1) * sizeof(*contexts));
+		contexts, (size_t) (num_contexts + 1) * sizeof(*contexts));
 	if (!new_contexts)
 	{
 		polvCoreContextDestroy(&ctx);

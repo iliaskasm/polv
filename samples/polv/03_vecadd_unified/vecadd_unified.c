@@ -27,7 +27,9 @@
 #include "../common.h"
 
 #define TEST_CLEANUP() do { \
-	polvFree(d_a); polvFree(d_b); polvFree(d_c); \
+	polvFree(d_a); \
+	polvFree(d_b); \
+	polvFree(d_c); \
 	polvFinalize(); \
 } while (0)
 

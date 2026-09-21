@@ -64,7 +64,7 @@ static int parse_positive_size(const char *text, size_t *value)
 	parsed = strtoull(text, &end, 10);
 
 	if (errno != 0 || end == text || *end != '\0' || parsed == 0 ||
-	    parsed > (unsigned long long)SIZE_MAX)
+	    parsed > (unsigned long long) SIZE_MAX)
 		return 0;
 
 	*value = (size_t) parsed;

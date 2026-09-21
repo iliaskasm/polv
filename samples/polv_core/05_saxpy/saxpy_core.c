@@ -94,7 +94,7 @@ int main(void)
 		"kernel creation failed");
 	void *args[] = { d_x, d_y, d_alpha, d_out };
 	TEST_POLVC_CHECK(polvCoreKernelLaunch(kernel, args,
-		(uint32_t)((n + threads - 1) / threads), 1, 1,
+		(uint32_t) ((n + threads - 1) / threads), 1, 1,
 		threads, 1, 1), "kernel launch failed");
 
 	/* Device-to-host transfer (out) */

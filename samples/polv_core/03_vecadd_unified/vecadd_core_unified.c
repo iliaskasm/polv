@@ -68,7 +68,7 @@ int main(void)
 	for (i = 0; i < n; ++i)
 	{
 		a[i] = (float) i;
-		b[i] = (float)(2 * i);
+		b[i] = (float) (2 * i);
 		c[i] = 0.0f;
 	}
 
@@ -77,7 +77,7 @@ int main(void)
 	TEST_POLVC_CHECK(polvCoreKernelCreate(&kernel, "vecadd.spv", 3),
 		"kernel creation failed");
 	TEST_POLVC_CHECK(polvCoreKernelLaunch(kernel, args,
-		(uint32_t)((n + nthreads - 1) / nthreads), 1, 1,
+		(uint32_t) ((n + nthreads - 1) / nthreads), 1, 1,
 		nthreads, 1, 1), "kernel launch failed");
 
 	/* Verification */
