@@ -24,8 +24,6 @@
 CC ?= cc
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
-WARNINGS := -Wall -Wextra -Wpedantic
-PICFLAGS := -fPIC
 LDFLAGS ?=
 LDLIBS ?=
 
@@ -33,42 +31,55 @@ ROOT_DIR := ../..
 INCLUDE_DIR := $(ROOT_DIR)/include
 POLV_CORE_DIR := ../polv_core
 
-INSTALL_DIR ?= $(ROOT_DIR)/install
-INSTALL_INCLUDE_DIR := $(INSTALL_DIR)/include
-INSTALL_LIBRARY_DIR := $(INSTALL_DIR)/lib
+BUILD_DIR ?= $(abspath $(ROOT_DIR)/build/polv)
+POLV_CORE_BUILD_DIR ?= $(abspath $(ROOT_DIR)/build/polv_core)
+
+TARGET := $(BUILD_DIR)/libpolv.so
+CORE_LIBRARY := $(POLV_CORE_BUILD_DIR)/libpolvcore.so
+
+WARNINGS := -Wall -Wextra -Wpedantic
+PICFLAGS := -fPIC
+DEPFLAGS := -MMD -MP
 
 LOCAL_CPPFLAGS := -I$(INCLUDE_DIR) -I.
 
-OBJS := polv.o contexts.o kernels.o
+SOURCES := $(wildcard *.c)
+OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
+DEPS := $(OBJECTS:.o=.d)
 
-.PHONY: all clean polvcore check
+CORE_INPUTS := \
+	$(wildcard $(POLV_CORE_DIR)/*.c) \
+	$(wildcard $(POLV_CORE_DIR)/*.h) \
+	$(INCLUDE_DIR)/polv_core.h \
+	$(POLV_CORE_DIR)/Makefile
 
-all: libpolv.so
+.PHONY: all clean check
 
-polvcore:
-	$(MAKE) -C $(POLV_CORE_DIR)
+all: $(TARGET)
 
+$(TARGET): $(OBJECTS) $(CORE_LIBRARY)
+	@mkdir -p $(dir $@)
+	$(CC) -shared $(LDFLAGS) \
+		-Wl,-soname,libpolv.so \
+		-Wl,-rpath,'$$ORIGIN:$$ORIGIN/../polv_core' \
+		-o $@ $(OBJECTS) \
+		-L$(POLV_CORE_BUILD_DIR) -lpolvcore $(LDLIBS)
 
-libpolv.so: $(OBJS) polvcore
-	$(CC) -shared $(LDFLAGS) -Wl,-soname,libpolv.so -o $@ \
-		$(OBJS) -L$(POLV_CORE_DIR) -lpolvcore -Wl,-rpath,'$$ORIGIN' $(LDLIBS)
+$(CORE_LIBRARY): $(CORE_INPUTS)
+	$(MAKE) -C $(POLV_CORE_DIR) \
+		BUILD_DIR=$(POLV_CORE_BUILD_DIR)
 
-
-polv.o: polv.c contexts.h kernels.h polv_internal.h \
-        $(INCLUDE_DIR)/polv.h $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-contexts.o: contexts.c contexts.h polv_internal.h \
-            $(INCLUDE_DIR)/polv.h $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-kernels.o: kernels.c kernels.h contexts.h polv_internal.h \
-           $(INCLUDE_DIR)/polv.h $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) \
+		$(WARNINGS) $(PICFLAGS) $(DEPFLAGS) \
+		-c $< -o $@
 
 check:
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) -Werror -fsyntax-only \
-		polv.c contexts.c kernels.c 
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) \
+		$(WARNINGS) -Werror -fsyntax-only $(SOURCES)
 
 clean:
-	rm -f $(OBJS) libpolv.so
+	rm -rf $(BUILD_DIR)
+
+-include $(DEPS)

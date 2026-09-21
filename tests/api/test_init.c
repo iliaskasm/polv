@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/*
+ * Test POLV initialization
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+typedef struct {
+	int initialized;
+} State;
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
 
-#endif /* POLV_VERSION_H */
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+
+	// Require #devices > 0
+	TEST_REQUIRE(test, polvGetNumDevices() > 0);
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+		polvFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("api/init", run, cleanup, &state);
+}

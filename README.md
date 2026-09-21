@@ -48,7 +48,21 @@ Build POLV-C with:
 make
 ```
 
-Optionally run the compile-time checks:
+By default, build artifacts are placed under the `build` directory:
+
+```text
+build/
+    polv/
+    polv_core/
+```
+
+To use a different build directory, override the `BUILD_DIR` variable:
+
+```sh
+make BUILD_DIR=path/to/build
+```
+
+Optionally run the compile-time checks with:
 
 ```sh
 make check
@@ -62,7 +76,7 @@ By default, POLV-C installs into the `install` directory inside the repository:
 make install
 ```
 
-This creates:
+This builds POLV-C if necessary and creates:
 
 ```text
 install/
@@ -75,20 +89,34 @@ install/
 		libpolvcore.so
 ```
 
-The samples are configured to use this local installation:
+If POLV-C was built using a custom build directory, pass the same `BUILD_DIR` when installing:
+
+```sh
+make BUILD_DIR=path/to/build install
+```
+
+The samples are configured to use the default local installation:
 
 ```sh
 make -C samples
 make -C samples run
 ```
 
-
 ### Installation under a different directory
 
 POLV-C can be installed into its own directory, e.g., under `/usr/local`:
 
 ```sh
-sudo make install INSTALL_DIR=/usr/local/polv
+sudo make INSTALL_DIR=/usr/local/polv install
+```
+
+A custom build and installation directory can also be specified together:
+
+```sh
+sudo make \
+    BUILD_DIR=path/to/build \
+    INSTALL_DIR=/usr/local/polv \
+    install
 ```
 
 Add the POLV-C include and library directories to the compiler, linker, and
@@ -101,15 +129,14 @@ export LD_LIBRARY_PATH="/usr/local/polv/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 ```
 
 To make these settings persistent for Bash, add them to `~/.bashrc`.
- 
 After configuring these paths, an application using the POLV API can be
-compiled directly, without any `-I` or `-L` options, with:
+compiled directly, without any additional `-I` or `-L` options, with:
 
 ```sh
 gcc program.c -lpolv -o program
 ```
 
-...or using the POLV Core API:
+...or if it uses the POLV Core API:
 
 ```sh
 gcc program.c -lpolvcore -o program
@@ -190,7 +217,7 @@ interpreted as raw PCIe or VRAM bandwidth.
 ## Example
 
 The following POLV example adds two arrays using a Vulkan compute shader and host-coherent memory.
-The variant that utilizes device-local memory can be found under `samples/polv/vecadd.c`.
+The variant that utilizes device-local memory can be found under `samples/polv/02_vecadd/vecadd.c`.
 
 ### Compute shader
 

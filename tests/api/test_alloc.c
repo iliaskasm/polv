@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,57 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* 
+ * Memory allocation tests 
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+typedef struct {
+	int initialized;
+	void *ptrs[3];
+} State;
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
+	const size_t bytes = 4096;
 
-#endif /* POLV_VERSION_H */
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+
+	// Test various memory allocation types
+	state->ptrs[0] = polvAlloc(bytes, polvMemDeviceLocal);
+	state->ptrs[1] = polvAlloc(bytes, polvMemHostVisible);
+	state->ptrs[2] = polvAlloc(bytes, polvMemHostCoherent);
+	TEST_REQUIRE(test, state->ptrs[0] != NULL);
+	TEST_REQUIRE(test, state->ptrs[1] != NULL);
+	TEST_REQUIRE(test, state->ptrs[2] != NULL);
+
+	// Test host pointers for host-visible and host-coherent memory
+	TEST_EXPECT(test, polvGetHostPointer(state->ptrs[1]) != NULL);
+	TEST_EXPECT(test, polvGetHostPointer(state->ptrs[2]) != NULL);
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+	{
+		test_free_polv(state->ptrs, 3);
+		polvFinalize();
+	}
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("api/alloc", run, cleanup, &state);
+}

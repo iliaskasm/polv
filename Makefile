@@ -20,12 +20,36 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# 
-
+#
 POLV_DIR := src/polv
 POLV_CORE_DIR := src/polv_core
 
+BUILD_DIR ?= build
+BUILD_ROOT := $(abspath $(BUILD_DIR))
+POLV_BUILD_DIR := $(BUILD_ROOT)/polv
+POLV_CORE_BUILD_DIR := $(BUILD_ROOT)/polv_core
+
+POLV_LIBRARY := $(POLV_BUILD_DIR)/libpolv.so
+POLV_CORE_LIBRARY := $(POLV_CORE_BUILD_DIR)/libpolvcore.so
+
+POLV_INPUTS := \
+	$(wildcard $(POLV_DIR)/*.c) \
+	$(wildcard $(POLV_DIR)/*.h) \
+	$(POLV_DIR)/Makefile \
+	include/polv.h \
+	include/polv_core.h \
+	$(VERSION_HEADER)
+
+POLV_CORE_INPUTS := \
+	$(wildcard $(POLV_CORE_DIR)/*.c) \
+	$(wildcard $(POLV_CORE_DIR)/*.h) \
+	$(POLV_CORE_DIR)/Makefile \
+	include/polv_core.h \
+	$(VERSION_HEADER)
+
 PACKAGE := polv
+
+LICENSE_FILE := LICENSE
 
 VERSION_FILE := VERSION
 VERSION := $(strip $(shell cat $(VERSION_FILE)))
@@ -37,41 +61,63 @@ VERSION_HEADER := include/polv_version.h
 
 DIST_NAME := $(PACKAGE)-$(VERSION)
 DIST_ARCHIVE := $(DIST_NAME).tar.gz
-DIST_FILES := Makefile README.md LICENSE VERSION include src samples
+DIST_FILES := Makefile README.md LICENSE VERSION include src samples tests
 
 INSTALL_DIR ?= $(CURDIR)/install
 INSTALL_INCLUDE_DIR := $(INSTALL_DIR)/include
 INSTALL_LIBRARY_DIR := $(INSTALL_DIR)/lib
 
+INSTALL_FILES := \
+	$(INSTALL_INCLUDE_DIR)/polv_core.h \
+	$(INSTALL_INCLUDE_DIR)/polv.h \
+	$(INSTALL_INCLUDE_DIR)/polv_version.h \
+	$(INSTALL_LIBRARY_DIR)/libpolvcore.so \
+	$(INSTALL_LIBRARY_DIR)/libpolv.so
+
+TESTS_DIR := $(CURDIR)/tests
 SAMPLES_DIR := $(CURDIR)/samples
 
-.PHONY: all clean polvcore polv install uninstall check dist version-header
+TEST_TARGETS := test test_api test_memory test_kernels test_lifecycle
 
-all: polvcore polv
+.PHONY: all clean distclean polvcore polv install uninstall check dist \
+	$(TEST_TARGETS)
 
-polvcore: version-header
-	$(MAKE) -C $(POLV_CORE_DIR)
+all: $(POLV_CORE_LIBRARY) $(POLV_LIBRARY)
 
-polv: version-header polvcore
-	$(MAKE) -C $(POLV_DIR)
+polvcore: $(POLV_CORE_LIBRARY)
 
-install: all
-	mkdir -p $(INSTALL_INCLUDE_DIR) $(INSTALL_LIBRARY_DIR)
+polv: $(POLV_LIBRARY)
 
-	install -m 644 include/polv_core.h \
-		$(INSTALL_INCLUDE_DIR)/polv_core.h
+$(POLV_CORE_LIBRARY): $(POLV_CORE_INPUTS)
+	$(MAKE) -C $(POLV_CORE_DIR) \
+		BUILD_DIR=$(POLV_CORE_BUILD_DIR)
 
-	install -m 644 include/polv.h \
-		$(INSTALL_INCLUDE_DIR)/polv.h
+$(POLV_LIBRARY): $(POLV_INPUTS) $(POLV_CORE_LIBRARY)
+	$(MAKE) -C $(POLV_DIR) \
+		BUILD_DIR=$(POLV_BUILD_DIR) \
+		POLV_CORE_BUILD_DIR=$(POLV_CORE_BUILD_DIR)
 
-	install -m 644 include/polv_version.h \
-		$(INSTALL_INCLUDE_DIR)/polv_version.h
+install: $(INSTALL_FILES)
 
-	install -m 755 $(POLV_CORE_DIR)/libpolvcore.so \
-		$(INSTALL_LIBRARY_DIR)/libpolvcore.so
+$(INSTALL_INCLUDE_DIR)/polv_core.h: include/polv_core.h
+	@mkdir -p $(dir $@)
+	install -m 644 $< $@
 
-	install -m 755 $(POLV_DIR)/libpolv.so \
-		$(INSTALL_LIBRARY_DIR)/libpolv.so
+$(INSTALL_INCLUDE_DIR)/polv.h: include/polv.h
+	@mkdir -p $(dir $@)
+	install -m 644 $< $@
+
+$(INSTALL_INCLUDE_DIR)/polv_version.h: $(VERSION_HEADER)
+	@mkdir -p $(dir $@)
+	install -m 644 $< $@
+
+$(INSTALL_LIBRARY_DIR)/libpolvcore.so: $(POLV_CORE_LIBRARY)
+	@mkdir -p $(dir $@)
+	install -m 755 $< $@
+
+$(INSTALL_LIBRARY_DIR)/libpolv.so: $(POLV_LIBRARY)
+	@mkdir -p $(dir $@)
+	install -m 755 $< $@
 
 uninstall:
 	rm -f $(INSTALL_INCLUDE_DIR)/polv_core.h
@@ -80,41 +126,44 @@ uninstall:
 	rm -f $(INSTALL_LIBRARY_DIR)/libpolvcore.so
 	rm -f $(INSTALL_LIBRARY_DIR)/libpolv.so
 
-check: version-header
+check: $(VERSION_HEADER)
 	$(MAKE) -C $(POLV_CORE_DIR) check
 	$(MAKE) -C $(POLV_DIR) check
 
 clean:
-	$(MAKE) -C $(POLV_DIR) clean
-	$(MAKE) -C $(POLV_CORE_DIR) clean
+	rm -rf $(BUILD_ROOT)
+	$(MAKE) -C $(SAMPLES_DIR) clean
+	$(MAKE) -C $(TESTS_DIR) clean
 
-dist: version-header
+dist: $(VERSION_HEADER)
 	rm -rf $(DIST_NAME) $(DIST_ARCHIVE)
 	mkdir -p $(DIST_NAME)
 	cp -a $(DIST_FILES) $(DIST_NAME)/
 	$(MAKE) -C $(DIST_NAME) clean
-	$(MAKE) -C $(DIST_NAME)/samples clean
 	tar -czf $(DIST_ARCHIVE) $(DIST_NAME)
 	rm -rf $(DIST_NAME)
 	@echo "Created $(DIST_ARCHIVE)"
 
 distclean: clean uninstall
 	rm -rf $(DIST_NAME) $(DIST_ARCHIVE)
-	rm -rf $(INSTALL_DIR)
-	$(MAKE) -C $(SAMPLES_DIR) clean
 
-version-header:
-	@printf '%s\n' \
-		'/* Generated from VERSION. Do not edit manually. */' \
-		'#ifndef POLV_VERSION_H' \
-		'#define POLV_VERSION_H' \
-		'' \
-		'#define POLV_VERSION_MAJOR $(VERSION_MAJOR)' \
-		'#define POLV_VERSION_MINOR $(VERSION_MINOR)' \
-		'#define POLV_VERSION_PATCH $(VERSION_PATCH)' \
-		'' \
-		'#define POLV_VERSION_STRING "$(VERSION)"' \
-		'' \
-		'#endif /* POLV_VERSION_H */' \
-		> $(VERSION_HEADER).tmp
-	@mv $(VERSION_HEADER).tmp $(VERSION_HEADER)
+$(TEST_TARGETS): install
+	$(MAKE) -C $(TESTS_DIR) \
+		POLV_INSTALL_DIR=$(abspath $(INSTALL_DIR)) \
+		$@
+
+$(VERSION_HEADER): $(VERSION_FILE) $(LICENSE_FILE)
+	@{ \
+		printf '/*\n'; \
+		sed 's/^/ * /' $(LICENSE_FILE); \
+		printf ' */\n\n'; \
+		printf '/* Generated from VERSION (%s). Do not edit manually. */\n' "$(VERSION)"; \
+		printf '#ifndef POLV_VERSION_H\n'; \
+		printf '#define POLV_VERSION_H\n\n'; \
+		printf '#define POLV_VERSION_MAJOR %s\n' "$(VERSION_MAJOR)"; \
+		printf '#define POLV_VERSION_MINOR %s\n' "$(VERSION_MINOR)"; \
+		printf '#define POLV_VERSION_PATCH %s\n\n' "$(VERSION_PATCH)"; \
+		printf '#define POLV_VERSION_STRING "%s"\n\n' "$(VERSION)"; \
+		printf '#endif /* POLV_VERSION_H */\n'; \
+	} > $@.tmp
+	@mv $@.tmp $@

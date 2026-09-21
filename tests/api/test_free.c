@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,53 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* 
+ * Memory freeing tests
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+typedef struct {
+	int initialized;
+	void *ptr;
+} State;
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
 
-#endif /* POLV_VERSION_H */
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+
+	state->ptr = polvAlloc(4096, polvMemDeviceLocal);
+	TEST_REQUIRE(test, state->ptr != NULL);
+
+	polvFree(state->ptr);
+	state->ptr = NULL;
+
+	// Freeing NULL is intentionally a no-op in the public POLV API
+	polvFree(NULL);
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+	{
+		if (state->ptr)
+			polvFree(state->ptr);
+		polvFinalize();
+	}
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("api/free", run, cleanup, &state);
+}

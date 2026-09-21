@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,52 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* 
+ * Device ID tests
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+typedef struct {
+	int initialized;
+} State;
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
+	int devices;
 
-#endif /* POLV_VERSION_H */
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+
+	// Get number of devices
+	devices = polvGetNumDevices();
+	TEST_REQUIRE(test, devices > 0);
+
+	// Ensure that we can switch to each device successfully
+	for (int i = 0; i < devices; i++)
+	{
+		TEST_REQUIRE_RESULT(test, polvSetDevice(i), POLV_SUCCESS);
+		TEST_REQUIRE(test, polvGetCurrentDeviceId() == i);
+	}
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+		polvFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("api/device", run, cleanup, &state);
+}

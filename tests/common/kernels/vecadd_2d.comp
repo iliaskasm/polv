@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* 
+ * VECTOR ADDITION SHADER, 2D GRID
+ */
+#version 450
+layout(local_size_x_id = 0,
+       local_size_y_id = 1,
+       local_size_z_id = 2) in;
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+layout(set = 0, binding = 0) readonly buffer A { 
+	float a[]; 
+};
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
+layout(set = 0, binding = 1) readonly buffer B { 
+	float b[]; 
+};
 
-#define POLV_VERSION_STRING "1.0.0"
+layout(set = 0, binding = 2) writeonly buffer C { 
+	float c[]; 
+};
 
-#endif /* POLV_VERSION_H */
+layout(set = 0, binding = 3) readonly buffer Shape { 
+	uint width; 
+	uint height; 
+} shape;
+
+/* C = A + B */
+void main()
+{
+	uvec2 id = gl_GlobalInvocationID.xy;
+
+	if (id.x >= shape.width || id.y >= shape.height)
+		return;
+
+	uint i = id.y * shape.width + id.x;
+	c[i] = a[i] + b[i];
+}

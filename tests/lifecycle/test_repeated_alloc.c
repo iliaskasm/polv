@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,56 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/*
+ * POLV repeated memory allocations
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+#define NITERS 256 
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
+typedef struct {
+	int initialized;
+	void *current;
+} State;
 
-#define POLV_VERSION_STRING "1.0.0"
 
-#endif /* POLV_VERSION_H */
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
+	const size_t bytes = 64 * 1024;
+	int iter;
+
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+
+	// Allocate and free memory `NITERS` times
+	for (iter = 0; iter < NITERS; iter++)
+	{
+		state->current = polvAlloc(bytes, polvMemDeviceLocal);
+		TEST_REQUIRE(test, state->current != NULL);
+		polvFree(state->current);
+		state->current = NULL;
+	}
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+	if (state->initialized)
+	{
+		if (state->current)
+			polvFree(state->current);
+		polvFinalize();
+	}
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+	return test_run("lifecycle/repeated_alloc", run, cleanup, &state);
+}

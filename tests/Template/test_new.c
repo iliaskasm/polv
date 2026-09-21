@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,54 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/*
+ * Template for new tests
+ *
+ * Don't forget to include your new test in the Makefile
+ */
+#include <stdint.h>
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+typedef struct {
+	int initialized;
+	void *da;
+	float *a;
+} State;
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
 
-#endif /* POLV_VERSION_H */
+	// Initialize POLV
+	TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+	state->initialized = 1;
+	
+	return 1; // success
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+	void *polv_ptrs[] = { state->da };
+	void *host_ptrs[] = { state->a };
+
+	// cleanup: use test_free_polv for polv_ptrs and test_free_host
+	// for host_ptrs
+	if (state->initialized) 
+	{ 
+		// test_free_polv(...)
+		polvFinalize();
+	}
+
+	// test_free_host(...)
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("Template/new", run, cleanup, &state);
+}

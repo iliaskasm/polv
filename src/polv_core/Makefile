@@ -21,58 +21,52 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # 
-
 CC ?= cc
 CFLAGS ?= -O2 -g
 CPPFLAGS ?=
-WARNINGS := -Wall -Wextra -Wpedantic
-PICFLAGS := -fPIC
 LDFLAGS ?=
 LDLIBS ?=
 
 ROOT_DIR := ../..
 INCLUDE_DIR := $(ROOT_DIR)/include
 
-INSTALL_DIR ?= $(ROOT_DIR)/install
-INSTALL_INCLUDE_DIR := $(INSTALL_DIR)/include
-INSTALL_LIBRARY_DIR := $(INSTALL_DIR)/lib
+BUILD_DIR ?= $(abspath $(ROOT_DIR)/build/polv_core)
+
+TARGET := $(BUILD_DIR)/libpolvcore.so
+
+WARNINGS := -Wall -Wextra -Wpedantic
+PICFLAGS := -fPIC
+DEPFLAGS := -MMD -MP
 
 LOCAL_CPPFLAGS := -I$(INCLUDE_DIR) -I.
 
-OBJS := polv_core.o runtime.o contexts.o memory.o kernels.o
+SOURCES := $(wildcard *.c)
+OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
+DEPS := $(OBJECTS:.o=.d)
 
 .PHONY: all clean check
 
-all: libpolvcore.so
+all: $(TARGET)
 
-libpolvcore.so: $(OBJS)
-	$(CC) -shared $(LDFLAGS) -Wl,-rpath,'$$ORIGIN' \
-	-Wl,-soname,libpolvcore.so -o $@ $^ -lvulkan $(LDLIBS)
+$(TARGET): $(OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) -shared $(LDFLAGS) \
+		-Wl,-soname,libpolvcore.so \
+		-Wl,-rpath,'$$ORIGIN' \
+		-o $@ $(OBJECTS) \
+		-lvulkan $(LDLIBS)
 
-polv_core.o: polv_core.c runtime.h contexts.h memory.h kernels.h \
-             polv_core_internal.h \
-             $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-runtime.o: runtime.c runtime.h contexts.h kernels.h polv_core_internal.h \
-           $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-contexts.o: contexts.c contexts.h memory.h kernels.h polv_core_internal.h \
-            $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-memory.o: memory.c memory.h runtime.h polv_core_internal.h \
-          $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
-
-kernels.o: kernels.c kernels.h polv_core_internal.h \
-           $(INCLUDE_DIR)/polv_core.h
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) $(PICFLAGS) -c $< -o $@
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) \
+		$(WARNINGS) $(PICFLAGS) $(DEPFLAGS) \
+		-c $< -o $@
 
 check:
-	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) $(WARNINGS) -Werror -fsyntax-only \
-		polv_core.c runtime.c contexts.c memory.c kernels.c
+	$(CC) $(CPPFLAGS) $(LOCAL_CPPFLAGS) $(CFLAGS) \
+		$(WARNINGS) -Werror -fsyntax-only $(SOURCES)
 
 clean:
-	rm -f $(OBJS) libpolvcore.so
+	rm -rf $(BUILD_DIR)
+
+-include $(DEPS)

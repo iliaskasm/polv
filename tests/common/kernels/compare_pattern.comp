@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,37 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/*
+ * COMPARISON SHADER (pattern)
+ */
+#version 450
+layout(local_size_x_id = 0,
+       local_size_y_id = 1,
+       local_size_z_id = 2) in;
+	   
+layout(set = 0, binding = 0) readonly buffer DataBuffer
+{
+	uint data[];
+};
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+layout(set = 0, binding = 1) buffer ResultBuffer
+{
+	uint result[];
+};
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
+uint pattern(uint i)
+{
+	return 0x9e3779b9u * (i + 1u) ^ 0xa5a5a5a5u;
+}
 
-#define POLV_VERSION_STRING "1.0.0"
+void main()
+{
+	uint i;
+	result[0] = 0u;
 
-#endif /* POLV_VERSION_H */
+	for (i = 0; i < data.length(); ++i)
+		if (data[i] != pattern(i))
+			return;
+
+	result[0] = 1u;
+}

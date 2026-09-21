@@ -1,4 +1,4 @@
-/*
+/* 
  * MIT License
  * 
  * Copyright (c) 2026 Ilias K. Kasmeridis
@@ -21,15 +21,55 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/*
+ * POLV re-initialization
+ */
+#include "test.h"
 
-/* Generated from VERSION (1.0.0). Do not edit manually. */
-#ifndef POLV_VERSION_H
-#define POLV_VERSION_H
+#define NITERS 10
 
-#define POLV_VERSION_MAJOR 1
-#define POLV_VERSION_MINOR 0
-#define POLV_VERSION_PATCH 0
+typedef struct {
+	int initialized;
+} State;
 
-#define POLV_VERSION_STRING "1.0.0"
+static int run(TestContext *test, void *opaque)
+{
+	State *state = opaque;
+	int iter;
 
-#endif /* POLV_VERSION_H */
+	// Initialize and finalize POLV `NITERS` times
+	for (iter = 0; iter < NITERS; iter++)
+	{
+		TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+		state->initialized = 1;
+		TEST_REQUIRE(test, polvGetNumDevices() > 0);
+
+		// Re-initialization is expected to be harmless
+		TEST_REQUIRE_RESULT(test, polvInit(), POLV_SUCCESS);
+		TEST_REQUIRE(test, polvGetNumDevices() > 0);
+
+		polvFinalize();
+		state->initialized = 0;
+		TEST_REQUIRE(test, polvGetNumDevices() == POLV_ERROR_NOT_INITIALIZED);
+
+		// Finalizing an already-finalized API is expected to be harmless
+		polvFinalize();
+	}
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+	if (state->initialized)
+		polvFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+	return test_run("lifecycle/reinit", run, cleanup, &state);
+}
