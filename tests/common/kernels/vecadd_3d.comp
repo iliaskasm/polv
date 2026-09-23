@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 /* 
- * VECTOR ADDITION SHADER, 3D GRID
+ * VECTOR ADDITION SHADER, 3D GRID (c[i] = a[i] + b[i])
  */
 #version 450
 layout(local_size_x_id = 0,

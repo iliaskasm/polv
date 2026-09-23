@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 /* 
- * VECTOR ADDITION SHADER, 2D GRID
+ * VECTOR ADDITION SHADER, 2D GRID (c[i] = a[i] + b[i])
  */
 #version 450
 layout(local_size_x_id = 0,
@@ -46,7 +46,6 @@ layout(set = 0, binding = 3) readonly buffer Shape {
 	uint height; 
 } shape;
 
-/* C = A + B */
 void main()
 {
 	uvec2 id = gl_GlobalInvocationID.xy;

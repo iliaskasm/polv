@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 /* 
- * INIT SHADER
+ * INIT SHADER (src[i] = value)
  */
 #version 450
 layout(

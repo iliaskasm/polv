@@ -21,43 +21,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+/*
+ * POLV Core initialization tests
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+typedef struct {
+	int initialized;
+} State;
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
 
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
-
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = opaque;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	// Initialize POLV Core
+	TEST_REQUIRE_SUCCESS(test, polvCoreInit());
+	state->initialized = 1;
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+	// Ensure that at least one Vulkan device is available
+	TEST_REQUIRE(test, polvCoreGetNumDevices() > 0);
 
-	c[row * shape.n + col] = sum;
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+		polvCoreFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("api/init", run, cleanup, &state);
 }

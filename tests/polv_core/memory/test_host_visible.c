@@ -22,24 +22,53 @@
  * SOFTWARE.
  */
 /*
- * Template for new POLV tests
+ * Host-visible memory test
  */
-#include "../common/test.h"
+#include "test.h"
 
 typedef struct {
 	int initialized;
+	POLVCoreContext *context;
+	POLVCoreMemory *allocation;
 } State;
 
 
 static int run(TestContext *test, void *opaque)
 {
 	State *state = opaque;
+	const size_t n = 256;
+	float *ptr, *ptr2;
+	size_t i;
+	POLVCoreDevice *device;
 
-	// Initialize POLV
-	TEST_REQUIRE_SUCCESS(test, polvInit());
+	// Initialize POLV Core
+	TEST_REQUIRE_SUCCESS(test, polvCoreInit());
 	state->initialized = 1;
+	TEST_REQUIRE(test, polvCoreGetNumDevices() > 0);
+	device = polvCoreGetDevice(0);
+	TEST_REQUIRE(test, device != NULL);
+	TEST_REQUIRE_SUCCESS(test, polvCoreContextCreate(&state->context, device));
+	TEST_REQUIRE_SUCCESS(test, polvCoreContextSetCurrent(state->context));
 	
-	return 1; // success
+	// Allocate host-visible memory
+	state->allocation = polvCoreMemoryAllocHostVisible(n * sizeof(float));
+	TEST_REQUIRE(test, state->allocation != NULL);
+
+	// Get host pointers
+	ptr = polvCoreMemoryGetHostPointer(state->allocation);
+	ptr2 = polvCoreMemoryGetHostPointer(state->allocation);
+	TEST_REQUIRE(test, ptr != NULL);
+	TEST_REQUIRE(test, ptr2 == ptr);
+
+	// Initialize host-visible memory
+	for (i = 0; i < n; i++)
+		ptr[i] = (float) i * 0.75f;
+
+	// Verification
+	for (i = 0; i < n; i++)
+		TEST_REQUIRE(test, ptr2[i] == (float) i * 0.75f);
+
+	return 1;
 }
 
 
@@ -47,14 +76,13 @@ static void cleanup(void *opaque)
 {
 	State *state = opaque;
 
-	// cleanup: 
-	//   use test_free_polv for freeing up POLV memory 
-	//   and test_free_host for host memory. Of course,
-	//   manual polvFree() calls can be used.
-	if (state->initialized) 
-	{ 
-		// place cleanup code here, it's more safe
-		polvFinalize();
+	if (state->initialized)
+	{
+		if (state->allocation)
+			polvCoreMemoryFree(state->allocation);
+		if (state->context)
+			polvCoreContextDestroy(&state->context);
+		polvCoreFinalize();
 	}
 }
 
@@ -63,5 +91,5 @@ int main(void)
 {
 	State state = { 0 };
 
-	return test_run("Template/new", run, cleanup, &state);
+	return test_run("memory/host_visible", run, cleanup, &state);
 }

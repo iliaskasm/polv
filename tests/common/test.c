@@ -27,8 +27,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "test.h"
-
 
 static void test_fail(TestContext *test, const char *file, int line,
                       const char *format, ...)
@@ -75,7 +75,7 @@ int test_expect(TestContext *test, int condition, const char *expression,
 }
 
 
-int test_expect_result(TestContext *test, POLVResult actual, POLVResult expected,
+int test_expect_result(TestContext *test, RESULT_TYPE actual, RESULT_TYPE expected,
                        const char *expression, const char *file, int line)
 {
 	if (actual == expected)
@@ -83,8 +83,8 @@ int test_expect_result(TestContext *test, POLVResult actual, POLVResult expected
 
 	test_fail(test, file, line,
 	          "%s returned %d (%s), expected %d (%s)",
-	          expression, (int) actual, polvStatus(actual),
-	          (int) expected, polvStatus(expected));
+	          expression, (int) actual, PSTATUS(actual),
+	          (int) expected, PSTATUS(expected));
 	return 0;
 }
 
@@ -93,18 +93,17 @@ int test_compare_float(TestContext *test, const float *actual, const float *expe
                        size_t count, float epsilon, const char *file, int line)
 {
 	size_t i;
+
 	for (i = 0; i < count; i++)
 	{
-		float delta = actual[i] - expected[i];
+		float a = actual[i];
+		float e = expected[i];
 
-		if (delta < 0.0f)
-			delta = -delta;
-
-		if (delta > epsilon)
+		if (isnan(a) || isnan(e) || fabsf(a - e) > epsilon)
 		{
 			test_fail(test, file, line,
 			          "mismatch at %zu: got %.9g, expected %.9g (epsilon %.9g)",
-			          i, (double) actual[i], (double) expected[i], (double) epsilon);
+			          i, (double) a, (double) e, (double) epsilon);
 			return 0;
 		}
 	}
@@ -128,8 +127,11 @@ void test_free_polv(void **ptrs, size_t count)
 	{
 		if (ptrs[i])
 		{
+#if defined(USE_POLV_CORE)
+			polvCoreMemoryFree((POLVCoreMemory *) ptrs[i]);
+#elif defined(USE_POLV)
 			polvFree(ptrs[i]);
-			ptrs[i] = NULL;
+#endif
 		}
 	}
 }

@@ -21,43 +21,54 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+/*
+ * POLV status string tests
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include <stddef.h>
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+typedef struct {
+	int ignore;
+} State;
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
-
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
-
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = (State *) opaque;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	const POLVResult statuses[] = {
+		POLV_SUCCESS,
+		POLV_ERROR,
+		POLV_ERROR_NOT_INITIALIZED,
+		POLV_ERROR_INVALID_ARGUMENT,
+		POLV_ERROR_NO_DEVICE,
+		POLV_ERROR_VULKAN,
+		POLV_ERROR_OUT_OF_MEMORY,
+		POLV_ERROR_SHADER,
+		POLV_ERROR_UNSUPPORTED,
+		POLV_ERROR_DEVICE_ID_OUT_OF_BOUNDS,
+		POLV_ERROR_CONTEXT_MISMATCH,
+		POLV_ERROR_CONTEXT_NOT_INITIALIZED
+	};
+	const size_t count = sizeof(statuses) / sizeof(statuses[0]);
+	size_t i;
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+	// Verify that every public status code has a non-empty message
+	for (i = 0; i < count; i++)
+	{
+		const char *message = polvStatus(statuses[i]);
 
-	c[row * shape.n + col] = sum;
+		TEST_REQUIRE(test, message != NULL);
+		TEST_REQUIRE(test, message[0] != '\0');
+	}
+
+	state->ignore = 0x999;
+	return 1;
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+	
+	return test_run("api/status", run, NULL, &state);
 }

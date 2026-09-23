@@ -21,43 +21,55 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+/*
+ * POLV re-initialization
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+#define NITERS 10
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
+typedef struct {
+	int initialized;
+} State;
 
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
-
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = opaque;
+	int iter;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	// Initialize and finalize POLV `NITERS` times
+	for (iter = 0; iter < NITERS; iter++)
+	{
+		TEST_REQUIRE_SUCCESS(test, polvInit());
+		state->initialized = 1;
+		TEST_REQUIRE(test, polvGetNumDevices() > 0);
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+		// Re-initialization is expected to be harmless
+		TEST_REQUIRE_SUCCESS(test, polvInit());
+		TEST_REQUIRE(test, polvGetNumDevices() > 0);
 
-	c[row * shape.n + col] = sum;
+		polvFinalize();
+		state->initialized = 0;
+		TEST_REQUIRE(test, polvGetNumDevices() == POLV_ERROR_NOT_INITIALIZED);
+
+		// Finalizing an already-finalized API is expected to be harmless
+		polvFinalize();
+	}
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+	if (state->initialized)
+		polvFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+	return test_run("lifecycle/reinit", run, cleanup, &state);
 }

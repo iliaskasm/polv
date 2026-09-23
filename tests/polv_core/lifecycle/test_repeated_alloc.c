@@ -22,24 +22,47 @@
  * SOFTWARE.
  */
 /*
- * Template for new POLV tests
+ * POLV Core repeated memory allocations
  */
-#include "../common/test.h"
+#include "test.h"
+
+#define NITERS 256
 
 typedef struct {
 	int initialized;
+	POLVCoreContext *context;
+	POLVCoreMemory *current;
 } State;
 
 
 static int run(TestContext *test, void *opaque)
 {
 	State *state = opaque;
+	const VkDeviceSize bytes = 64 * 1024;
+	POLVCoreDevice *device;
+	int iter;
 
-	// Initialize POLV
-	TEST_REQUIRE_SUCCESS(test, polvInit());
+	// Initialize POLV Core
+	TEST_REQUIRE_SUCCESS(test, polvCoreInit());
 	state->initialized = 1;
-	
-	return 1; // success
+
+	// Get device and create context
+	TEST_REQUIRE(test, polvCoreGetNumDevices() > 0);
+	device = polvCoreGetDevice(0);
+	TEST_REQUIRE(test, device != NULL);
+	TEST_REQUIRE_SUCCESS(test, polvCoreContextCreate(&state->context, device));
+	TEST_REQUIRE_SUCCESS(test, polvCoreContextSetCurrent(state->context));
+
+	// Allocate and free memory `NITERS` times
+	for (iter = 0; iter < NITERS; iter++)
+	{
+		state->current = polvCoreMemoryAllocDeviceLocal(bytes);
+		TEST_REQUIRE(test, state->current != NULL);
+		polvCoreMemoryFree(state->current);
+		state->current = NULL;
+	}
+
+	return 1;
 }
 
 
@@ -47,14 +70,14 @@ static void cleanup(void *opaque)
 {
 	State *state = opaque;
 
-	// cleanup: 
-	//   use test_free_polv for freeing up POLV memory 
-	//   and test_free_host for host memory. Of course,
-	//   manual polvFree() calls can be used.
-	if (state->initialized) 
-	{ 
-		// place cleanup code here, it's more safe
-		polvFinalize();
+
+	if (state->initialized)
+	{
+		if (state->current)
+			polvCoreMemoryFree(state->current);
+		if (state->context)
+			polvCoreContextDestroy(&state->context);
+		polvCoreFinalize();
 	}
 }
 
@@ -63,5 +86,5 @@ int main(void)
 {
 	State state = { 0 };
 
-	return test_run("Template/new", run, cleanup, &state);
+	return test_run("lifecycle/repeated_alloc", run, cleanup, &state);
 }

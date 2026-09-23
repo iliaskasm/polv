@@ -77,14 +77,14 @@ INSTALL_FILES := \
 TESTS_DIR := $(CURDIR)/tests
 SAMPLES_DIR := $(CURDIR)/samples
 
-TEST_TARGETS := test test_api test_memory test_kernels test_lifecycle
+TEST_TARGETS := test test_polv test_polv_core
 
-.PHONY: all clean distclean polvcore polv install uninstall check dist \
+.PHONY: all clean distclean polv_core polv install uninstall check dist \
 	$(TEST_TARGETS)
 
 all: $(POLV_CORE_LIBRARY) $(POLV_LIBRARY)
 
-polvcore: $(POLV_CORE_LIBRARY)
+polv_core: $(POLV_CORE_LIBRARY)
 
 polv: $(POLV_LIBRARY)
 

@@ -22,42 +22,56 @@
  * SOFTWARE.
  */
 /* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+ * Memory allocation tests 
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+typedef struct {
+	int initialized;
+	void *ptrs[3];
+} State;
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
 
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
-
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = opaque;
+	const size_t bytes = 4096;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	// Initialize POLV
+	TEST_REQUIRE_SUCCESS(test, polvInit());
+	state->initialized = 1;
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+	// Test various memory allocation types
+	state->ptrs[0] = polvAlloc(bytes, polvMemDeviceLocal);
+	state->ptrs[1] = polvAlloc(bytes, polvMemHostVisible);
+	state->ptrs[2] = polvAlloc(bytes, polvMemHostCoherent);
+	TEST_REQUIRE(test, state->ptrs[0] != NULL);
+	TEST_REQUIRE(test, state->ptrs[1] != NULL);
+	TEST_REQUIRE(test, state->ptrs[2] != NULL);
 
-	c[row * shape.n + col] = sum;
+	// Test host pointers for host-visible and host-coherent memory
+	TEST_EXPECT(test, polvGetHostPointer(state->ptrs[1]) != NULL);
+	TEST_EXPECT(test, polvGetHostPointer(state->ptrs[2]) != NULL);
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+	{
+		test_free_polv(state->ptrs, 3);
+		polvFinalize();
+	}
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("memory/alloc", run, cleanup, &state);
 }

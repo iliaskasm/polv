@@ -21,10 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/*
- * Template for new POLV tests
+/* 
+ * Device information tests
  */
-#include "../common/test.h"
+#include <string.h>
+#include "test.h"
 
 typedef struct {
 	int initialized;
@@ -34,12 +35,42 @@ typedef struct {
 static int run(TestContext *test, void *opaque)
 {
 	State *state = opaque;
+	int devices;
 
 	// Initialize POLV
 	TEST_REQUIRE_SUCCESS(test, polvInit());
 	state->initialized = 1;
-	
-	return 1; // success
+
+	// Get number of devices
+	devices = polvGetNumDevices();
+	TEST_REQUIRE(test, devices > 0);
+
+	for (int i = 0; i < devices; i++)
+	{
+		POLVDeviceInfo info;
+		const char *type_name;
+
+		memset(&info, 0, sizeof(info));
+
+		// Get device information
+		TEST_REQUIRE_SUCCESS(test, polvGetDeviceInfo(i, &info));
+		TEST_REQUIRE(test, info.id == i);
+		TEST_REQUIRE(test, info.name[0] != '\0');
+		TEST_REQUIRE(test, info.api_version_major > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_invocations > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_size[0] > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_size[1] > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_size[2] > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_count[0] > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_count[1] > 0);
+		TEST_REQUIRE(test, info.max_compute_work_group_count[2] > 0);
+
+		type_name = polvDeviceTypeName(info.type);
+		TEST_REQUIRE(test, type_name != NULL);
+		TEST_REQUIRE(test, type_name[0] != '\0');
+	}
+
+	return 1;
 }
 
 
@@ -47,15 +78,8 @@ static void cleanup(void *opaque)
 {
 	State *state = opaque;
 
-	// cleanup: 
-	//   use test_free_polv for freeing up POLV memory 
-	//   and test_free_host for host memory. Of course,
-	//   manual polvFree() calls can be used.
-	if (state->initialized) 
-	{ 
-		// place cleanup code here, it's more safe
+	if (state->initialized)
 		polvFinalize();
-	}
 }
 
 
@@ -63,5 +87,5 @@ int main(void)
 {
 	State state = { 0 };
 
-	return test_run("Template/new", run, cleanup, &state);
+	return test_run("api/device_info", run, cleanup, &state);
 }

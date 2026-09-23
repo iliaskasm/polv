@@ -21,43 +21,56 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+/*
+ * POLV repeated memory allocations
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+#define NITERS 256 
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
+typedef struct {
+	int initialized;
+	void *current;
+} State;
 
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
 
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = opaque;
+	const size_t bytes = 64 * 1024;
+	int iter;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	// Initialize POLV
+	TEST_REQUIRE_SUCCESS(test, polvInit());
+	state->initialized = 1;
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+	// Allocate and free memory `NITERS` times
+	for (iter = 0; iter < NITERS; iter++)
+	{
+		state->current = polvAlloc(bytes, polvMemDeviceLocal);
+		TEST_REQUIRE(test, state->current != NULL);
+		polvFree(state->current);
+		state->current = NULL;
+	}
 
-	c[row * shape.n + col] = sum;
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+	if (state->initialized)
+	{
+		if (state->current)
+			polvFree(state->current);
+		polvFinalize();
+	}
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+	return test_run("lifecycle/repeated_alloc", run, cleanup, &state);
 }

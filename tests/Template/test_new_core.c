@@ -22,24 +22,36 @@
  * SOFTWARE.
  */
 /*
- * Template for new POLV tests
+ * Template for new POLV Core tests
  */
 #include "../common/test.h"
 
 typedef struct {
 	int initialized;
+	POLVCoreContext *context;
+	POLVCoreMemory *memory;
 } State;
 
 
 static int run(TestContext *test, void *opaque)
 {
 	State *state = opaque;
+	POLVCoreDevice *device;
 
-	// Initialize POLV
-	TEST_REQUIRE_SUCCESS(test, polvInit());
+	// Initialize POLV Core
+	TEST_REQUIRE_RESULT(test, polvCoreInit(), POLV_CORE_SUCCESS);
 	state->initialized = 1;
-	
-	return 1; // success
+	TEST_REQUIRE(test, polvCoreGetNumDevices() > 0);
+
+	// Create and set the current context
+	device = polvCoreGetDevice(0);
+	TEST_REQUIRE(test, device != NULL);
+	TEST_REQUIRE_RESULT(test, polvCoreContextCreate(&state->context, device),
+	                          POLV_CORE_SUCCESS);
+	TEST_REQUIRE_RESULT(test, polvCoreContextSetCurrent(state->context),
+	                          POLV_CORE_SUCCESS);
+
+	return 1;
 }
 
 
@@ -50,11 +62,13 @@ static void cleanup(void *opaque)
 	// cleanup: 
 	//   use test_free_polv for freeing up POLV memory 
 	//   and test_free_host for host memory. Of course,
-	//   manual polvFree() calls can be used.
-	if (state->initialized) 
-	{ 
+	//   manual polvCoreMemoryFree() calls can be used.
+	if (state->initialized)
+	{
 		// place cleanup code here, it's more safe
-		polvFinalize();
+		if (state->context)
+			polvCoreContextDestroy(&state->context);
+		polvCoreFinalize();
 	}
 }
 
@@ -63,5 +77,5 @@ int main(void)
 {
 	State state = { 0 };
 
-	return test_run("Template/new", run, cleanup, &state);
+	return test_run("Template/new_core", run, cleanup, &state);
 }

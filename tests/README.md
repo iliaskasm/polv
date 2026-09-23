@@ -1,41 +1,50 @@
 # POLV-C Tests
 
-This directory contains the test suite for POLV. Currently, the tests cover only the high-level POLV API.
+This directory contains the test suites for both the high-level POLV API and the low-level POLV Core API.
 
-The available test families are:
+Both POLV/POLV Core share the following families:
 
-* `api`: tests core POLV API functionality
+* `api`: tests public POLV API functionality
 * `kernels`: tests common compute kernels such as vector addition and matrix multiplication
 * `lifecycle`: tests repeated use of POLV functions and resources
-* `memory`: tests memory transfers
+* `memory`: tests memory transfers and memory types
 
-The `common` directory contains shared testing utilities and shaders used across the test families.
+The POLV Core test suite has an extra family:
 
-The `Template` directory provides a starting point for implementing new tests.
+* `contexts`: tests context creation and current-context handling
+
+The `common` directory contains shared testing utilities and shaders used by both suites.
+
+The `Template` directory provides starting points for implementing new POLV and POLV Core tests.
 
 # Usage
 
-To build and run all tests:
+To build and run both test suites:
 
 ```sh
 make test
 ```
 
-To run a specific test family:
+To run only one test suite from this directory:
 
 ```sh
-make test_<family>
+make test_polv
+make test_polv_core
 ```
 
-For example:
+To run a specific POLV test family:
 
 ```sh
-make test_memory
+make -C polv test_memory
 ```
 
-These commands can also be executed from the root directory of the project.
+To run a specific POLV Core test family:
 
-Test binaries and intermediate files are generated in the `build/` directory. To remove them, run:
+```sh
+make -C polv_core test_contexts
+```
+
+Test binaries and intermediate files are generated in each suite's `build/` directory. To remove them, run:
 
 ```sh
 make clean

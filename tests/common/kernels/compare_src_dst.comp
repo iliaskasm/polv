@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 /* 
- * COMPARISON SHADER (src = dst)
+ * COMPARISON SHADER (src[i] == dst[i])
  */
 #version 450
 layout(local_size_x_id = 0,

@@ -27,12 +27,31 @@
 #ifndef POLV_TEST_H
 #define POLV_TEST_H
 
-#include <polv.h>
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(USE_POLV)
+	#include <polv.h>
+	#define RESULT_TYPE    POLVResult
+	#define PSTATUS        polvStatus
+	#define RESULT_SUCCESS POLV_SUCCESS
+#elif defined(USE_POLV_CORE)
+	#include <polv_core.h>
+	#define RESULT_TYPE    POLVCoreResult
+	#define PSTATUS        polvCoreStatus
+	#define RESULT_SUCCESS POLV_CORE_SUCCESS
+#elif defined(__INTELLISENSE__) // IntelliSense-only defs
+	#include <polv.h>
+	#include <polv_core.h>
+	#define RESULT_TYPE     int
+	#define PSTATUS(status) ""
+	#define RESULT_SUCCESS  1
+#else
+	#error "Either USE_POLV or USE_POLV_CORE must be defined"
+#endif
+
 #ifndef POLV_TEST_KERNEL_DIR
-#define POLV_TEST_KERNEL_DIR "build/kernels"
+	#define POLV_TEST_KERNEL_DIR "build/kernels"
 #endif
 
 /* 
@@ -48,7 +67,7 @@ typedef int (*TestFunction)(TestContext *test, void *state);
 typedef void (*TestCleanupFunction)(void *state);
 
 /*
- * Defs 
+ * Helper defs 
  */
 #define TEST_SHADER(name) POLV_TEST_KERNEL_DIR "/" name ".spv"
 #define TEST_EXPECT(test, expression) \
@@ -69,6 +88,9 @@ typedef void (*TestCleanupFunction)(void *state);
 			return 0; \
 	} while (0)
 
+#define TEST_REQUIRE_SUCCESS(test, expression) \
+	TEST_REQUIRE_RESULT(test, expression, RESULT_SUCCESS)
+
 #define TEST_COMPARE_FLOAT(test, actual, expected, count, epsilon) \
 	test_compare_float((test), (actual), (expected), (count), (epsilon), __FILE__, __LINE__)
 
@@ -86,7 +108,7 @@ int test_expect(TestContext *test, int condition, const char *expression,
 
 // Expects `actual == expected`, used for POLV function calls.
 // If not, it prints the error and adds +1 to the test context's failures.
-int test_expect_result(TestContext *test, POLVResult actual, POLVResult expected,
+int test_expect_result(TestContext *test, RESULT_TYPE actual, RESULT_TYPE expected,
                        const char *expression, const char *file, int line);
 
 // Expects `actual == expected`, used for floats and usually during verification.
@@ -98,7 +120,7 @@ int test_compare_float(TestContext *test, const float *actual, const float *expe
 // Fills a float array with values.
 void test_fill_float(float *data, size_t count, float scale, float bias);
 
-// Frees up POLV memory
+// Frees POLV or POLV Core memory
 void test_free_polv(void **ptrs, size_t count);
 
 // Frees up HOST memory

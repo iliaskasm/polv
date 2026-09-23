@@ -21,43 +21,60 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-/* 
- * MATRIX MULTIPLICATION SHADER (C = AB)
+/*
+ * POLV host-to-host memory copy
  */
-#version 450
-layout(local_size_x_id = 0,
-       local_size_y_id = 1,
-       local_size_z_id = 2) in;
+#include <stdint.h>
+#include "test.h"
 
-layout(set = 0, binding = 0) readonly buffer A { 
-	float a[];
-};
+#define SIZE 32
 
-layout(set = 0, binding = 1) readonly buffer B { 
-	float b[];
-};
+typedef struct {
+	int initialized;
+} State;
 
-layout(set = 0, binding = 2) writeonly buffer C { 
-	float c[];
-};
 
-layout(set = 0, binding = 3) readonly buffer Shape { 
-	uint m;
-	uint n; 
-	uint k;
-} shape;
-
-void main()
+static int run(TestContext *test, void *opaque)
 {
-	uint col = gl_GlobalInvocationID.x;
-	uint row = gl_GlobalInvocationID.y;
+	State *state = opaque;
+	uint32_t src[SIZE], dst[SIZE] = { 0 };
+	const size_t src_offset = 3 * sizeof(uint32_t),
+	             dst_offset = 5 * sizeof(uint32_t),
+	             count = 16,
+	             bytes = count * sizeof(uint32_t);
+	size_t i;
 
-	if (row >= shape.m || col >= shape.n)
-		return;
+	// Initialize POLV
+	TEST_REQUIRE_SUCCESS(test, polvInit());
+	state->initialized = 1;
 
-	float sum = 0.0;
-	for (uint p = 0; p < shape.k; p++)
-		sum += a[row * shape.k + p] * b[p * shape.n + col];
+	// Initialize source data
+	for (i = 0; i < SIZE; i++)
+		src[i] = 0x13579bdfu ^ (uint32_t) i;
 
-	c[row * shape.n + col] = sum;
+	// HOST src -> HOST dst using non-zero offsets
+	TEST_REQUIRE_SUCCESS(test, polvMemcpy(src, src_offset, dst, dst_offset, bytes, polvHostToHost));
+
+	// Verify the copied range
+	for (i = 0; i < count; i++)
+		TEST_REQUIRE(test, dst[5 + i] == src[3 + i]);
+
+	return 1;
+}
+
+
+static void cleanup(void *opaque)
+{
+	State *state = opaque;
+
+	if (state->initialized)
+		polvFinalize();
+}
+
+
+int main(void)
+{
+	State state = { 0 };
+
+	return test_run("memory/h2h", run, cleanup, &state);
 }
