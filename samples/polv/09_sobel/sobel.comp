@@ -1,0 +1,109 @@
+/* 
+ * MIT License
+ * 
+ * Copyright (c) 2026 Ilias K. Kasmeridis
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+#version 450
+layout(local_size_x_id = 0,
+       local_size_y_id = 1,
+       local_size_z_id = 2) in;
+
+layout(set = 0, binding = 0) readonly buffer Input {
+	uint pixels[];
+} input_image;
+
+layout(set = 0, binding = 1) writeonly buffer Output {
+	uint pixels[];
+} output_image;
+
+layout(set = 0, binding = 2) readonly buffer Shape {
+	uint width;
+	uint height;
+} shape;
+
+
+float grayscale(uint pixel)
+{
+	float r = float(pixel & 0xffu);
+	float g = float((pixel >> 8) & 0xffu);
+	float b = float((pixel >> 16) & 0xffu);
+
+	return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+
+float sample_pixel(int x, int y)
+{
+	uint i = uint(y) * shape.width + uint(x);
+
+	return grayscale(input_image.pixels[i]);
+}
+
+
+void main()
+{
+	uvec2 id = gl_GlobalInvocationID.xy;
+
+	if (id.x >= shape.width || id.y >= shape.height)
+		return;
+
+	uint i = id.y * shape.width + id.x;
+
+	// Set image border to black
+	if (id.x == 0 || id.y == 0 ||
+	    id.x + 1 >= shape.width ||
+	    id.y + 1 >= shape.height)
+	{
+		output_image.pixels[i] = 0u;
+		return;
+	}
+
+	int x = int(id.x);
+	int y = int(id.y);
+
+	float p00 = sample_pixel(x - 1, y - 1);
+	float p01 = sample_pixel(x,     y - 1);
+	float p02 = sample_pixel(x + 1, y - 1);
+
+	float p10 = sample_pixel(x - 1, y);
+	float p12 = sample_pixel(x + 1, y);
+
+	float p20 = sample_pixel(x - 1, y + 1);
+	float p21 = sample_pixel(x,     y + 1);
+	float p22 = sample_pixel(x + 1, y + 1);
+
+	float gx =
+		-p00 + p02
+		-2.0 * p10 + 2.0 * p12
+		-p20 + p22;
+
+	float gy =
+		-p00 - 2.0 * p01 - p02
+		+p20 + 2.0 * p21 + p22;
+
+	float magnitude = sqrt(gx * gx + gy * gy);
+	uint edge = uint(clamp(magnitude, 0.0, 255.0));
+
+	output_image.pixels[i] =
+		edge |
+		(edge << 8) |
+		(edge << 16);
+}

@@ -21,43 +21,46 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 # 
-POLV_INSTALL_DIR ?= ../install
+CC ?= cc
+GLSLC ?= glslangValidator
 
-POLV_DIRS := $(patsubst %/,%,$(dir $(wildcard polv/*/Makefile)))
-POLV_CORE_DIRS := $(patsubst %/,%,$(dir $(wildcard polv_core/*/Makefile)))
+POLV_INSTALL_DIR ?= ../../../install
+POLV_LIBRARY_DIR = $(POLV_INSTALL_DIR)/lib
+POLV_HEADERS_DIR = $(POLV_INSTALL_DIR)/include
 
-.PHONY: all clean polv polv_core
+CPPFLAGS = -I$(POLV_HEADERS_DIR) -I.. -I../../utils
+CFLAGS = -O2 -g -Wall -Wextra -Wpedantic
+LDFLAGS = -L$(POLV_LIBRARY_DIR) \
+	-Wl,-rpath-link,$(POLV_LIBRARY_DIR) \
+	-Wl,-rpath,$(POLV_LIBRARY_DIR)
+LDLIBS = -lpolv
 
-all: polv polv_core
+COMMON = ../common
+TARGET = sobel
+SHADER = sobel.spv
+SAMPLE = sample.bmp
+OUTPUT = output.bmp
+BMP = ../../utils/bmp
 
-polv:
-	@for dir in $(POLV_DIRS); do \
-		$(MAKE) -C $$dir POLV_INSTALL_DIR="$(abspath $(POLV_INSTALL_DIR))" || exit $$?; \
-	done
+.PHONY: all clean run
 
-polv_core:
-	@for dir in $(POLV_CORE_DIRS); do \
-		$(MAKE) -C $$dir POLV_INSTALL_DIR="$(abspath $(POLV_INSTALL_DIR))" || exit $$?; \
-	done
+all: $(SHADER) $(TARGET)
+
+$(COMMON).o: $(COMMON).c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(SHADER): sobel.comp
+	$(GLSLC) -V $< -o $@
+
+$(BMP).o: $(BMP).c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TARGET): $(TARGET).c $(SHADER) $(COMMON).o $(BMP).o
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(COMMON).o $(BMP).o $(LDFLAGS) $(LDLIBS) -o $@
+
+run: all
+	@printf "[$(TARGET)]: "
+	@./$(TARGET) $(SAMPLE) $(OUTPUT)
 
 clean:
-	@for dir in $(POLV_DIRS); do \
-		$(MAKE) -C $$dir clean || exit $$?; \
-	done
-	@for dir in $(POLV_CORE_DIRS); do \
-		$(MAKE) -C $$dir clean || exit $$?; \
-	done
-	rm -rf polv/common.o polv_core/common.o utils/bmp.o
-
-run: run_polv run_polv_core
-
-run_polv: 
-	@for dir in $(POLV_DIRS); do \
-		$(MAKE) -C $$dir run || exit $$?; \
-	done
-
-run_polv_core: 
-	@for dir in $(POLV_CORE_DIRS); do \
-		$(MAKE) -C $$dir run || exit $$?; \
-	done
-
+	rm -f $(TARGET) $(SHADER) $(OUTPUT)

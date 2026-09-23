@@ -4,8 +4,10 @@
 *.so.*
 *.a
 
+*.bmp
+
 /build/
-/tests/build/
+/tests/**/build/
 /out/
 
 /install/
@@ -32,6 +34,9 @@ compile_commands.json
 /samples/**/bandwidth_core
 /samples/**/matmul
 /samples/**/matmul_core
+/samples/**/sobel
+/samples/**/sobel_core
+!/samples/**/sample.bmp
 
 /polv-*.tar.gz
 

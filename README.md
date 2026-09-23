@@ -191,6 +191,7 @@ Both interfaces include matching examples under `samples/`:
 | `06_matadd` | yes | yes | matrix addition |
 | `07_bandwidth` | yes | yes | tests bandwidth of H2D, D2H and D2D copies |
 | `08_matmul` | yes | yes | matrix multiplication (simple) |
+| `09_matmul` | yes | yes | sobel filter (BMP 24-bit) |
 
 Build and run the complete sample set with:
 

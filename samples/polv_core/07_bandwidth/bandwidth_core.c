@@ -265,8 +265,8 @@ int main(int argc, char **argv)
 		"polvCoreContextCreate failed");
 
 	/* Device allocations */
-	device_src = polvCoreMemoryAllocDeviceLocal((VkDeviceSize) bytes);
-	device_dst = polvCoreMemoryAllocDeviceLocal((VkDeviceSize) bytes);
+	device_src = polvCoreMemoryAllocDeviceLocal(bytes);
+	device_dst = polvCoreMemoryAllocDeviceLocal(bytes);
 	TEST_CHECK(device_src && device_dst,
 		"device allocation failed; try a smaller transfer size");
 
