@@ -226,12 +226,11 @@ POLVCoreResult polvCoreContextCreate(POLVCoreContext **context, POLVCoreDevice *
 
 	*context = ctx;
 
-	/* If there is no current context, set it to the one we created;
-	 * also add it to the list.
-	 */
+	/* If there is no current context, set it to the one we created */
 	if (polvc_contexts_get_current() == NULL)
 		polvc_contexts_set_current(ctx);
-
+		
+	/* Add it to the list */
 	polvc_contexts_link(ctx);
 
 	return POLV_CORE_SUCCESS;
