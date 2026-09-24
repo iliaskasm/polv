@@ -21,7 +21,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
 /*
  * POLV Core kernel helpers (internal)
  */
@@ -29,8 +28,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include "kernels.h"
 #include "polv_core_internal.h"
@@ -43,14 +46,14 @@ static char *dup_string(const char *s)
 	if (!s)
 		return NULL;
 	n = strlen(s) + 1;
-	copy = (char *) malloc(n);
+	copy = (char *) smalloc(n);
 	if (copy)
 		memcpy(copy, s, n);
 	return copy;
 }
 
-/* Reads a file and dumps it to a 32-bit unsigned int. */
-static POLVCoreResult read_file(const char *path, uint32_t **out, size_t *out_size)
+/* Reads an entire file into memory. */
+static POLVCoreResult read_file(const char *path, void **out, size_t *out_size, unsigned long typesize)
 {
 	FILE *fp;
 	long n;
@@ -72,7 +75,7 @@ static POLVCoreResult read_file(const char *path, uint32_t **out, size_t *out_si
 	}
 
 	n = ftell(fp);
-	if (n <= 0 || ((size_t) n % sizeof(uint32_t)) != 0)
+	if (n <= 0 || ((size_t) n % typesize) != 0)
 	{
 		fclose(fp);
 		return POLV_CORE_ERROR_SHADER;
@@ -84,7 +87,7 @@ static POLVCoreResult read_file(const char *path, uint32_t **out, size_t *out_si
 		return POLV_CORE_ERROR_SHADER;
 	}
 
-	*out = (uint32_t *) malloc((size_t) n);
+	*out = smalloc((size_t) n);
 	if (!*out)
 	{
 		fclose(fp);
@@ -102,6 +105,17 @@ static POLVCoreResult read_file(const char *path, uint32_t **out, size_t *out_si
 	fclose(fp);
 	*out_size = (size_t) n;
 	return POLV_CORE_SUCCESS;
+}
+
+static POLVCoreResult read_file_uint32(const char *path, uint32_t **out, size_t *out_size)
+{
+	return read_file(path, (void **) out, out_size, sizeof(uint32_t));
+}
+
+
+static POLVCoreResult read_file_str(const char *path, char **out, size_t *out_size)
+{
+	return read_file(path, (void **) out, out_size, sizeof(char));
 }
 
 
@@ -128,7 +142,7 @@ static char *make_shader_cache_key(const char *filename)
 	if (n < 0)
 		return NULL;
 
-	key = (char *) malloc((size_t) n + 1);
+	key = (char *) smalloc((size_t) n + 1);
 	if (!key)
 		return NULL;
 
@@ -153,7 +167,7 @@ static void destroy_shader_module(POLVCoreDevice *dev, POLVCoreShader *s)
 
 
 /* Destroys a shader given its ID. */
-void polvc_kernels_shader_destroy(POLVCoreDevice *dev, int shader_id)
+void polvc_kernels_destroy_shader(POLVCoreDevice *dev, int shader_id)
 {
 	POLVCoreShader *s;
 
@@ -168,8 +182,21 @@ void polvc_kernels_shader_destroy(POLVCoreDevice *dev, int shader_id)
 }
 
 
-/* Creates a shader given its filename (*.spv). */
-int polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename)
+static int _cache_enabled(void)
+{
+	const char *cache = getenv("POLV_CACHE");
+
+	return !cache || strcmp(cache, "0") != 0;
+}
+
+
+/* Creates a shader given its SPIR-V binary filename. If from_glsl==1,
+ * it means that we are called by polvc_kernel_shader_new_from_glsl, 
+ * therefore we should simply delete the SPIR-V binary after the 
+ * compilation *only if* the POLV_CACHE envvar is set to 0.
+ */
+int polvc_kernels_shader_new_from_spv(POLVCoreDevice *dev, const char *shader_filename,
+                                      int ignore)
 {
 	VkShaderModuleCreateInfo ci;
 	uint32_t *code;
@@ -179,6 +206,7 @@ int polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename)
 	int id;
 	POLVCoreResult res;
 
+	(void) ignore;
 	if (!dev || !shader_filename)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
@@ -207,7 +235,7 @@ int polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename)
 	/* (3) Shader was not cached; read it from disk */
 	code = NULL;
 	code_size = 0;
-	if ((res = read_file(shader_filename, &code, &code_size)) 
+	if ((res = read_file_uint32(shader_filename, &code, &code_size)) 
 		!= POLV_CORE_SUCCESS)
 	{
 		free(new_key);
@@ -226,7 +254,7 @@ int polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename)
 	if (!s->filename)
 	{
 		free(code);
-		polvc_kernels_shader_destroy(dev, id);
+		polvc_kernels_destroy_shader(dev, id);
 		return POLV_CORE_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -240,13 +268,473 @@ int polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename)
 	                         &s->compute_shader_module) != VK_SUCCESS)
 	{
 		free(code);
-		polvc_kernels_shader_destroy(dev, id);
+		polvc_kernels_destroy_shader(dev, id);
 		return POLV_CORE_ERROR_SHADER;
 	}
 
 	free(code);
 	++dev->nshaders;
+
 	return id;
+}
+
+
+/* djb33_hash 64-bit */
+static uint64_t _hash_update(uint64_t h, const void *data, size_t len)
+{
+	const unsigned char *p = data;
+
+	while (len--)
+	{
+		h += h << 5;
+		h ^= *p++;
+	}
+
+	return h;
+}
+
+
+/* Hashes passed data, and if use_tag==1 it also employs a tag */
+static uint64_t _shader_hash(const void *data, size_t len, int use_tag)
+{
+	static const char cache_tag[] = "polv-1.0|glslangValidator|-V|-S|comp";
+	uint64_t h = 5381;
+
+	h = _hash_update(h, data, len);
+	if (use_tag)
+		h = _hash_update(h, cache_tag, sizeof(cache_tag) - 1);
+
+	return h;
+}
+
+
+static int _mkdir_if_needed(const char *path)
+{
+	struct stat st;
+
+	if (mkdir(path, 0755) == 0)
+		return 1;
+
+	if (errno != EEXIST)
+		return 0;
+
+	if (stat(path, &st) != 0)
+		return 0;
+
+	return S_ISDIR(st.st_mode);
+}
+
+
+/* Creates ~/.cache/polv */
+static int _create_cache_dir(void)
+{
+	const char *home = getenv("HOME");
+	char cache[PATH_MAX], polv_cache[PATH_MAX];
+
+	if (!home)
+		return 0;
+
+	if (snprintf(cache, sizeof(cache), "%s/.cache", home) >= (int) sizeof(cache))
+		return 0;
+
+	if (snprintf(polv_cache, sizeof(polv_cache), "%s/.cache/polv", home) >= (int) sizeof(polv_cache))
+		return 0;
+
+	if (!_mkdir_if_needed(cache))
+		return 0;
+
+	if (!_mkdir_if_needed(polv_cache))
+		return 0;
+
+	return 1;
+}
+
+
+/* Reads a file and outputs a hash */
+static POLVCoreResult _hash_file(const char *filename, uint64_t *hash)
+{
+	void *data;
+	size_t size;
+	POLVCoreResult res;
+
+	if (!filename || !hash)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	res = read_file(filename, &data, &size, 1);
+	if (res != POLV_CORE_SUCCESS)
+		return res;
+
+	*hash = _shader_hash(data, size, 0);
+	free(data);
+
+	return POLV_CORE_SUCCESS;
+}
+
+
+static int _make_cache_path(char *path, size_t path_size, const char *home,
+                            uint64_t hash, const char *suffix)
+{
+	int n = snprintf(path, path_size, "%s/.cache/polv/%016" PRIx64 "%s",
+	                 home, hash, suffix);
+	return n >= 0 && (size_t) n < path_size;
+}
+
+
+static int _read_cache_key(const char *path, uint64_t *hash)
+{
+	FILE *fp;
+	int ret;
+
+	fp = fopen(path, "r");
+	if (!fp)
+		return 0;
+
+	ret = fscanf(fp, "%16" SCNx64, hash) == 1;
+	fclose(fp);
+
+	return ret;
+}
+
+
+static int _write_cache_key(const char *path, const char *home, uint64_t hash)
+{
+	char tmp_path[PATH_MAX];
+	FILE *fp;
+	int fd, ok, n;
+
+	n = snprintf(tmp_path, sizeof(tmp_path),
+	             "%s/.cache/polv/.key-XXXXXX", home);
+	if (n < 0 || (size_t) n >= sizeof(tmp_path))
+		return 0;
+
+	fd = mkstemp(tmp_path);
+	if (fd < 0)
+		return 0;
+
+	fp = fdopen(fd, "w");
+	if (!fp)
+	{
+		close(fd);
+		unlink(tmp_path);
+		return 0;
+	}
+
+	ok = fprintf(fp, "%016" PRIx64 "\n", hash) > 0;
+	if (fclose(fp) != 0)
+		ok = 0;
+
+	if (!ok)
+	{
+		unlink(tmp_path);
+		return 0;
+	}
+
+	if (rename(tmp_path, path) != 0)
+	{
+		unlink(tmp_path);
+		return 0;
+	}
+
+	return 1;
+}
+
+
+static int _glslang_compile_comp(const char *src, const char *dst)
+{
+	int pipefd[2];
+	pid_t pid;
+	char *output = NULL;
+	size_t output_len = 0;
+	int status;
+
+	/* Create the pipe for writing glslangValidator output */
+	if (pipe(pipefd) < 0)
+		return 0;
+
+	/* Spawn a child process for executing the compilation command */
+	pid = fork();
+	if (pid == 0)
+	{
+		close(pipefd[0]); // child doesn't read
+
+		dup2(pipefd[1], STDOUT_FILENO);
+		dup2(pipefd[1], STDERR_FILENO);
+		close(pipefd[1]);
+
+		execlp("glslangValidator", "glslangValidator", "-V", "-S", "comp",
+		       src,  "-o", dst, (char *) NULL);
+		_exit(127);
+	}
+
+	if (pid < 0)
+	{
+		close(pipefd[0]);
+		close(pipefd[1]);
+		return 0;
+	}
+
+	close(pipefd[1]); // parent doesn't write
+
+	/* I am the parent, read child info */
+	int output_failed = 0;
+
+	for (;;)
+	{
+		char buf[1024], *tmp;
+		ssize_t n = read(pipefd[0], buf, sizeof(buf));
+
+		if (n <= 0)
+			break;
+
+		if (output_failed)
+			continue;
+
+		tmp = realloc(output, output_len + (size_t) n + 1);
+		if (!tmp)
+		{
+			free(output);
+			output = NULL;
+			output_len = 0;
+			output_failed = 1;
+			continue;
+		}
+
+		output = tmp;
+		memcpy(output + output_len, buf, (size_t) n);
+		output_len += (size_t) n;
+		output[output_len] = '\0';
+	}
+
+	close(pipefd[0]); // Parent has read, close the fd
+
+	if (waitpid(pid, &status, 0) < 0)
+	{
+		free(output);
+		return 0;
+	}
+
+	/* Print the error only if status != 0 */
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+	{
+		if (output && output_len)
+			fprintf(stderr, "[polv_core] error:%s: compilation failed:\n%s", src, output);
+		free(output);
+		unlink(dst);
+		return 0;
+	}
+
+	free(output);
+
+	return 1;
+}
+
+
+/* 
+ * This creates a shader given its source filename (*.comp).
+ * If from_string == 1, it means that we are called by 
+ * polvc_kernel_shader_new_from_string, therefore we should
+ * delete the .comp file after the compilation.
+ */
+int polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev,
+                                       const char *shader_source_filename,
+                                       int from_string)
+{
+	const char *home;
+	char *source;
+	char key_path[PATH_MAX], spv_path[PATH_MAX], tmp_path[PATH_MAX];
+	size_t source_size;
+	uint64_t source_hash, spv_hash, cached_spv_hash, existing_hash;
+	POLVCoreResult res;
+	int fd, ret;
+
+	if (!dev || !shader_source_filename)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	res = read_file_str(shader_source_filename, &source, &source_size);
+	if (res != POLV_CORE_SUCCESS)
+		return res;
+
+	/*
+	 * Source hash is used only as a lookup key.
+	 * Include POLV/glslang compilation configuration in this hash.
+	 */
+	source_hash = _shader_hash(source, source_size, 1);
+	free(source);
+
+	/*
+	 * Cache is turned off (POLV_CACHE=0)
+	 * GLSL -> /tmp/polv-XXXXXX.spv -> create shader -> delete
+	 */
+	if (!_cache_enabled())
+	{
+		strcpy(tmp_path, "/tmp/polv-XXXXXX.spv");
+
+		fd = mkstemps(tmp_path, 4);
+		if (fd < 0)
+			return POLV_CORE_ERROR_SHADER;
+
+		close(fd);
+
+		if (!_glslang_compile_comp(shader_source_filename, tmp_path))
+		{
+			unlink(tmp_path);
+			return POLV_CORE_ERROR_SHADER;
+		}
+
+		ret = polvc_kernels_shader_new_from_spv(dev, tmp_path, 0);
+		unlink(tmp_path);
+
+		return ret;
+	}
+
+	/*
+	 * Cache is turned on:
+	 * <source hash>.key -> <SPIR-V hash>
+	 * <SPIR-V hash>.spv -> actual binary
+	 */
+	home = getenv("HOME");
+	if (!home)
+		return POLV_CORE_ERROR_SHADER;
+
+	if (!_create_cache_dir())
+		return POLV_CORE_ERROR_SHADER;
+
+	if (!_make_cache_path(key_path, sizeof(key_path), home, source_hash, ".key"))
+		return POLV_CORE_ERROR_SHADER;
+
+	/*
+	 * First try the source -> SPIR-V mapping.
+	 * Identical source -> skip compilation.
+	 */
+	if (_read_cache_key(key_path, &cached_spv_hash))
+	{
+		if (_make_cache_path(spv_path, sizeof(spv_path), home,
+		                     cached_spv_hash, ".spv") &&
+		    access(spv_path, F_OK) == 0)
+			return polvc_kernels_shader_new_from_spv(dev, spv_path, 0);
+	}
+
+	/*
+	 * No source-cache hit. Compile into a temporary SPIR-V file
+	 * inside ~/.cache/polv.
+	 */
+	if (snprintf(tmp_path, sizeof(tmp_path),
+	             "%s/.cache/polv/.tmp-XXXXXX.spv", home) >= (int) sizeof(tmp_path))
+		return POLV_CORE_ERROR_SHADER;
+
+	fd = mkstemps(tmp_path, 4);
+	if (fd < 0)
+		return POLV_CORE_ERROR_SHADER;
+	close(fd);
+
+	if (!_glslang_compile_comp(shader_source_filename, tmp_path))
+	{
+		unlink(tmp_path); // delete temporary file
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	/*
+	 * Hash the generated SPIR-V. Different GLSL sources which generate
+	 * identical SPIR-V now resolve to exactly the same cached file.
+	 */
+	res = _hash_file(tmp_path, &spv_hash);
+	if (res != POLV_CORE_SUCCESS)
+	{
+		unlink(tmp_path);
+		return res;
+	}
+
+	if (!_make_cache_path(spv_path, sizeof(spv_path), home, spv_hash, ".spv"))
+	{
+		unlink(tmp_path);
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	/*
+	 * If an identical cached SPIR-V already exists, discard our temporary
+	 * copy. Also verify its contents in case the cache file was corrupted.
+	 */
+	if (access(spv_path, F_OK) == 0 &&
+	    _hash_file(spv_path, &existing_hash) == POLV_CORE_SUCCESS &&
+	    existing_hash == spv_hash)
+	{
+		unlink(tmp_path);
+	}
+	else
+	{
+		/*
+		 * tmp_path and spv_path are on the same filesystem, so rename()
+		 * is atomic and cannot fail with EXDEV.
+		 */
+		if (rename(tmp_path, spv_path) != 0)
+		{
+			unlink(tmp_path);
+			return POLV_CORE_ERROR_SHADER;
+		}
+	}
+
+	/*
+	 * source hash -> SPIR-V hash
+	 *
+	 * Failure to write this mapping does not make the shader unusable;
+	 * it only means we'll have to compile it again next time.
+	 */
+	_write_cache_key(key_path, home, spv_hash);
+
+	ret = polvc_kernels_shader_new_from_spv(dev, spv_path, 0);
+
+	if (from_string)
+		unlink(shader_source_filename);
+
+	return ret;
+}
+
+
+/* Creates a shader given its contents. */
+int polvc_kernels_shader_new_from_string(POLVCoreDevice *dev,
+                                         const char *shader_str,
+                                         int ignore)
+{
+	char shader_path[] = "/tmp/polv-XXXXXX.comp"; // template
+	size_t len;
+	FILE *fp;
+	int fd, ret;
+
+	(void) ignore;
+
+	if (!dev || !shader_str)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	fd = mkstemps(shader_path, 5);
+	if (fd < 0)
+		return POLV_CORE_ERROR_SHADER;
+
+	fp = fdopen(fd, "wb");
+	if (!fp)
+	{
+		close(fd);
+		unlink(shader_path);
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	len = strlen(shader_str);
+
+	if (fwrite(shader_str, 1, len, fp) != len)
+	{
+		fclose(fp);
+		unlink(shader_path);
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	if (fclose(fp) != 0)
+	{
+		unlink(shader_path);
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	ret = polvc_kernels_shader_new_from_glsl(dev, shader_path, 1);
+
+	return ret;
 }
 
 
@@ -287,7 +775,7 @@ static void kernel_unlink(POLVCoreKernel *kernel)
 
 
 /* Destroys a specific kernel; removes it from the list if unlink == 1. */
-void polvc_kernels_destroy(POLVCoreKernel *kernel, int unlink)
+void polvc_kernels_destroy_kernel(POLVCoreKernel *kernel, int unlink)
 {
 	POLVCoreContext *context;
 	POLVCoreDevice *dev;

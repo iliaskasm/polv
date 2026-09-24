@@ -292,7 +292,7 @@ POLVResult polvMemcpy(const void *src, size_t src_offset, void *dst, size_t dst_
  *                                                            *
  **************************************************************/
 
-POLVResult polvKernelLaunch(const char *filename, void **args, int nargs,
+POLVResult polvKernelLaunch(const char *shader_filename, void **args, int nargs,
                             POLVDim grid, POLVDim group)
 {
 	POLVCoreContext *context;
@@ -303,14 +303,71 @@ POLVResult polvKernelLaunch(const char *filename, void **args, int nargs,
 	if (!initialized)
 		return POLV_ERROR_NOT_INITIALIZED;
 
-	if (!filename || !args || nargs <= 0)
+	if (!shader_filename || !args || nargs <= 0)
 		return POLV_ERROR_INVALID_ARGUMENT;
 
-	context = polv_contexts_get_current_context();
-	if (!context)
+	if ((context = polv_contexts_get_current_context()) == NULL)
 		return POLV_ERROR_CONTEXT_NOT_INITIALIZED;
 
-	if ((res = polv_kernels_get_or_create(context, filename, nargs, &kernel)) 
+	if ((res = polv_kernels_get_or_create(context, shader_filename, NULL, nargs, &kernel, SHADER_SPV)) 
+		!= POLV_SUCCESS)
+		return res;
+
+	core_res = polvCoreKernelLaunch(kernel, args,
+	                                grid.x, grid.y, grid.z,
+	                                group.x, group.y, group.z);
+
+	return polv_status_from_core(core_res);
+}
+
+
+POLVResult polvKernelLaunchFromGLSL(const char *shader_filename, void **args, int nargs,
+                                    POLVDim grid, POLVDim group)
+{
+	POLVCoreContext *context;
+	POLVCoreKernel *kernel;
+	POLVCoreResult core_res;
+	POLVResult res;
+
+	if (!initialized)
+		return POLV_ERROR_NOT_INITIALIZED;
+
+	if (!shader_filename || !args || nargs <= 0)
+		return POLV_ERROR_INVALID_ARGUMENT;
+
+	if ((context = polv_contexts_get_current_context()) == NULL)
+		return POLV_ERROR_CONTEXT_NOT_INITIALIZED;
+
+	if ((res = polv_kernels_get_or_create(context, shader_filename, NULL, nargs, &kernel, SHADER_SOURCE)) 
+		!= POLV_SUCCESS)
+		return res;
+
+	core_res = polvCoreKernelLaunch(kernel, args,
+	                                grid.x, grid.y, grid.z,
+	                                group.x, group.y, group.z);
+
+	return polv_status_from_core(core_res);
+}
+
+
+POLVResult polvKernelLaunchFromString(const char *shader_str, void **args, int nargs,
+                                      POLVDim grid, POLVDim group)
+{
+	POLVCoreContext *context;
+	POLVCoreKernel *kernel;
+	POLVCoreResult core_res;
+	POLVResult res;
+
+	if (!initialized)
+		return POLV_ERROR_NOT_INITIALIZED;
+
+	if (!shader_str || !args || nargs <= 0)
+		return POLV_ERROR_INVALID_ARGUMENT;
+
+	if ((context = polv_contexts_get_current_context()) == NULL)
+		return POLV_ERROR_CONTEXT_NOT_INITIALIZED;
+
+	if ((res = polv_kernels_get_or_create(context, NULL, shader_str, nargs, &kernel, SHADER_STRING)) 
 		!= POLV_SUCCESS)
 		return res;
 

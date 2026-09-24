@@ -35,10 +35,15 @@ extern "C"
 {
 #endif
 
-int  polvc_kernels_shader_new(POLVCoreDevice *dev, const char *shader_filename);
-void polvc_kernels_shader_destroy(POLVCoreDevice *dev, int shader_id);
+int  polvc_kernels_shader_new_from_spv(POLVCoreDevice *dev, const char *shader_filename,
+                                       int ignore);
+int  polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev, const char *shader_source_filename,
+                                        int from_string);
+int  polvc_kernels_shader_new_from_string(POLVCoreDevice *dev, const char *shader_str,
+                                          int ignore);
+void polvc_kernels_destroy_shader(POLVCoreDevice *dev, int shader_id);
 void polvc_kernels_link(POLVCoreContext *context, POLVCoreKernel *kernel);
-void polvc_kernels_destroy(POLVCoreKernel *kernel, int unlink);
+void polvc_kernels_destroy_kernel(POLVCoreKernel *kernel, int unlink);
 POLVCoreResult polvc_kernels_create_descriptor_set_layout(POLVCoreKernel *kernel);
 POLVCoreResult polvc_kernels_create_pipeline_layout(POLVCoreKernel *kernel);
 POLVCoreResult polvc_kernels_create_descriptor_pool(POLVCoreKernel *kernel);

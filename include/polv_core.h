@@ -43,6 +43,8 @@ extern "C"
 #define POLV_CORE_API extern
 #endif
 
+#define POLV_CORE_SHADER_VERSION(v) "#version " v "\n"
+
 typedef enum POLVCoreResult_
 {
 	POLV_CORE_SUCCESS = 0,
@@ -321,7 +323,7 @@ POLV_CORE_API POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_o
  **************************************************************/
 
 /**
- * @brief Creates a kernel on the current context
+ * @brief Creates a kernel from a SPIR-V binary, on the current context
  * 
  * @param kernel          (ret) the created kernel
  * @param shader_filename the shader filename
@@ -330,6 +332,28 @@ POLV_CORE_API POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_o
  */
 POLV_CORE_API POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel, const char *shader_filename, 
                                                   int nargs);
+
+/**
+ * @brief Creates a kernel from a GLSL file, on the current context
+ * 
+ * @param kernel          (ret) the created kernel
+ * @param shader_filename the shader source filename
+ * @param nargs           the number of kernel arguments
+ * @return                POLV_CORE_SUCCESS on success, or POLV_CORE_ERROR_* otherwise
+ */
+POLV_CORE_API POLVCoreResult polvCoreKernelCreateFromGLSL(POLVCoreKernel **kernel,
+                                                          const char *shader_filename, int nargs);
+
+/**
+ * @brief Creates a kernel from a GLSL string, on the current context
+ * 
+ * @param kernel     (ret) the created kernel
+ * @param shader_str the shader source string
+ * @param nargs      the number of kernel arguments
+ * @return           POLV_CORE_SUCCESS on success, or POLV_CORE_ERROR_* otherwise
+ */
+POLV_CORE_API POLVCoreResult polvCoreKernelCreateFromString(POLVCoreKernel **kernel,
+                                                            const char *shader_str, int nargs);
 
 /**
  * @brief Destroys a kernel

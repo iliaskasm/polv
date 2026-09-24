@@ -133,7 +133,7 @@ void polvc_contexts_destroy(POLVCoreContext *context)
 	while (kernel)
 	{
 		next_kernel = kernel->next;
-		polvc_kernels_destroy(kernel, 0);
+		polvc_kernels_destroy_kernel(kernel, 0);
 		kernel = next_kernel;
 	}
 	context->kernels = NULL;

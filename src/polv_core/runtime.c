@@ -55,7 +55,7 @@ uint32_t polvc_runtime_find_compute_queue_family(VkPhysicalDevice physical)
 	if (count == 0)
 		return UINT32_MAX;
 
-	families = (VkQueueFamilyProperties *) malloc((size_t) count * sizeof(*families));
+	families = (VkQueueFamilyProperties *) smalloc((size_t) count * sizeof(*families));
 	if (!families)
 		return UINT32_MAX;
 
@@ -131,7 +131,7 @@ void polvc_runtime_finalize_device(POLVCoreDevice *dev)
 	dev->contexts = NULL;
 
 	for (i = 0; i < dev->nshaders; ++i)
-		polvc_kernels_shader_destroy(dev, i);
+		polvc_kernels_destroy_shader(dev, i);
 
 	dev->nshaders = 0;
 

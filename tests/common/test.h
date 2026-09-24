@@ -31,27 +31,37 @@
 #include <stdint.h>
 
 #if defined(USE_POLV)
+
 	#include <polv.h>
 	#define RESULT_TYPE    POLVResult
 	#define PSTATUS        polvStatus
 	#define RESULT_SUCCESS POLV_SUCCESS
+
 #elif defined(USE_POLV_CORE)
+
 	#include <polv_core.h>
 	#define RESULT_TYPE    POLVCoreResult
 	#define PSTATUS        polvCoreStatus
 	#define RESULT_SUCCESS POLV_CORE_SUCCESS
+
 #elif defined(__INTELLISENSE__) // IntelliSense-only defs
-	#include <polv.h>
+
 	#include <polv_core.h>
+	#include <polv.h>
 	#define RESULT_TYPE     int
 	#define PSTATUS(status) ""
 	#define RESULT_SUCCESS  1
+
 #else
 	#error "Either USE_POLV or USE_POLV_CORE must be defined"
 #endif
 
 #ifndef POLV_TEST_KERNEL_DIR
 	#define POLV_TEST_KERNEL_DIR "build/kernels"
+#endif
+
+#ifndef POLV_TEST_KERNEL_SRC_DIR
+	#define POLV_TEST_KERNEL_SRC_DIR "../common/kernels"
 #endif
 
 /* 
@@ -69,6 +79,7 @@ typedef void (*TestCleanupFunction)(void *state);
 /*
  * Helper defs 
  */
+#define TEST_SHADER_SRC(name) POLV_TEST_KERNEL_SRC_DIR "/" name ".comp"
 #define TEST_SHADER(name) POLV_TEST_KERNEL_DIR "/" name ".spv"
 #define TEST_EXPECT(test, expression) \
 	test_expect((test), !!(expression), #expression, __FILE__, __LINE__)

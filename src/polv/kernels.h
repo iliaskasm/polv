@@ -31,9 +31,16 @@
 #include "polv.h"
 #include "polv_core.h"
 
+typedef enum {
+	SHADER_SPV = 0,
+	SHADER_SOURCE,
+	SHADER_STRING
+} ShaderType;
+
 void       polv_kernels_init(void);
 void       polv_kernels_finalize(void);
 POLVResult polv_kernels_get_or_create(POLVCoreContext *context, const char *filename,
-                                      int nargs, POLVCoreKernel **kernel);
+                                      const char *shader, int nargs, POLVCoreKernel **kernel, 
+                                      ShaderType shadertype);
 
 #endif /* POLV_KERNELS_H */

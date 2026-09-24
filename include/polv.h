@@ -58,6 +58,8 @@ typedef enum POLVResult_
 	POLV_ERROR_CONTEXT_NOT_INITIALIZED = -11
 } POLVResult;
 
+#define POLV_SHADER_VERSION(v) "#version " v "\n"
+
 #define POLV_DEVICE_NAME_SIZE 256
 
 typedef enum POLVDeviceType_
@@ -130,6 +132,7 @@ POLV_API POLVResult polvInit(void);
  */
 POLV_API void polvFinalize(void);
 
+
 /**************************************************************
  *                                                            *
  * DEVICE HANDLING                                            *
@@ -174,6 +177,7 @@ POLV_API POLVResult polvGetDeviceInfo(int device_id, POLVDeviceInfo *info);
  * @return a static string describing the device type
  */
 POLV_API const char *polvDeviceTypeName(POLVDeviceType type);
+
 
 /**************************************************************
  *                                                            *
@@ -220,6 +224,7 @@ POLV_API void *polvGetHostPointer(void *addr);
 POLV_API POLVResult polvMemcpy(const void *src, size_t src_offset, void *dst, size_t dst_offset,
                                size_t size, POLVMemcpyDirection direction);
 
+
 /**************************************************************
  *                                                            *
  * KERNELS                                                    *
@@ -227,7 +232,7 @@ POLV_API POLVResult polvMemcpy(const void *src, size_t src_offset, void *dst, si
  **************************************************************/
 
 /**
- * @brief Launches a kernel (from disk)
+ * @brief Launches a kernel from a SPIR-V binary
  * 
  * @param shader_filename the kernel filename
  * @param args            the kernel arguments
@@ -238,6 +243,33 @@ POLV_API POLVResult polvMemcpy(const void *src, size_t src_offset, void *dst, si
  */
 POLV_API POLVResult polvKernelLaunch(const char *shader_filename, void **args, int nargs,
                                      POLVDim grid, POLVDim group);
+
+/**
+ * @brief Launches a kernel from a GLSL source file
+ * 
+ * @param shader_filename the kernel source filename
+ * @param args            the kernel arguments
+ * @param nargs           the number of kernel arguments
+ * @param grid            the grid dimensions
+ * @param group           the group dimensions
+ * @return POLV_SUCCESS on success, or POLV_ERROR_* otherwise
+ */
+POLV_API POLVResult polvKernelLaunchFromGLSL(const char *shader_filename, void **args, int nargs,
+                                             POLVDim grid, POLVDim group);
+
+/**
+ * @brief Launches a kernel from a GLSL source file
+ * 
+ * @param shader_filename the kernel source filename
+ * @param args            the kernel arguments
+ * @param nargs           the number of kernel arguments
+ * @param grid            the grid dimensions
+ * @param group           the group dimensions
+ * @return POLV_SUCCESS on success, or POLV_ERROR_* otherwise
+ */
+POLV_API POLVResult polvKernelLaunchFromString(const char *shader_str, void **args, int nargs,
+                                               POLVDim grid, POLVDim group);
+
 
 /**************************************************************
  *                                                            *

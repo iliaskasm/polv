@@ -29,12 +29,25 @@
 #ifndef POLV_CORE_INTERNAL_H
 #define POLV_CORE_INTERNAL_H
 
+#include <stdio.h>
+#include <stdlib.h>
 #include "polv_core.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+inline void *smalloc(size_t size)
+{
+	void *mem = malloc(size);
+	if (!mem)
+	{
+		fprintf(stderr, "smalloc failed\n");
+		return NULL;
+	}
+	return mem;
+}
 
 #define POLV_SHADER_CACHE_SIZE 256
 
@@ -90,6 +103,12 @@ struct POLVCorePipeline_
 	struct POLVCorePipeline_ *next;
 };
 
+typedef enum {
+	KERNEL_FROM_SPV = 0,
+	KERNEL_FROM_GLSL,
+	KERNEL_FROM_STRING
+} OriginType;
+
 struct POLVCoreKernel_
 {
 	struct POLVCoreContext_  *owner;
@@ -102,6 +121,8 @@ struct POLVCoreKernel_
 	struct POLVCorePipeline_ *pipelines;
 	struct POLVCoreKernel_   *prev;
 	struct POLVCoreKernel_   *next;
+
+	OriginType                origin;
 };
 
 /*

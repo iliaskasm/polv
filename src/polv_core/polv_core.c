@@ -87,7 +87,7 @@ POLVCoreResult polvCoreInit(void)
 		goto FAIL;
 	}
 
-	raw = (VkPhysicalDevice *) malloc((size_t) count * sizeof(*raw));
+	raw = (VkPhysicalDevice *) smalloc((size_t) count * sizeof(*raw));
 	devices = (POLVCoreDevice *) calloc((size_t) count, sizeof(*devices));
 	if (!raw || !devices)
 	{
@@ -637,8 +637,11 @@ POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_offset, void *d
  *                                                            *
  **************************************************************/
 
-POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
-                                    const char *shader_filename, int nargs)
+typedef int (*ShaderLoader)(POLVCoreDevice *, const char *, int);
+
+static POLVCoreResult _kernel_create(POLVCoreKernel **kernel,
+                                     const char *shader,
+                                     int nargs, ShaderLoader loader)
 {
 	POLVCoreContext *context;
 	POLVCoreDevice *dev;
@@ -649,7 +652,7 @@ POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
 	if (!polvc_runtime_state()->initialized)
 		return POLV_CORE_ERROR_NOT_INITIALIZED;
 
-	if (!kernel || !shader_filename || nargs <= 0)
+	if (!kernel || !shader || nargs <= 0)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
 	*kernel = NULL;
@@ -662,14 +665,14 @@ POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
 	if (!dev)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
-	shader_id = polvc_kernels_shader_new(dev, shader_filename);
+	shader_id = loader(dev, shader, 0);
 	if (shader_id < 0)
 		return (POLVCoreResult) shader_id;
 
 	if (shader_id >= dev->nshaders)
 		return POLV_CORE_ERROR_SHADER;
 
-	k = (POLVCoreKernel *) calloc(1, sizeof(*k));
+	k = calloc(1, sizeof(*k));
 	if (!k)
 		return POLV_CORE_ERROR_OUT_OF_MEMORY;
 
@@ -677,26 +680,54 @@ POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
 	k->shader = &dev->shader_cache[shader_id];
 	k->nargs = nargs;
 
+	/* Descriptor set layout */
 	if ((res = polvc_kernels_create_descriptor_set_layout(k)) != POLV_CORE_SUCCESS)
 		goto FAIL;
 
+	/* Pipeline layout */
 	if ((res = polvc_kernels_create_pipeline_layout(k)) != POLV_CORE_SUCCESS)
 		goto FAIL;
 
+	/* Descriptor pool */
 	if ((res = polvc_kernels_create_descriptor_pool(k)) != POLV_CORE_SUCCESS)
 		goto FAIL;
 
+	/* Descriptor set */
 	if ((res = polvc_kernels_allocate_descriptor_set(k)) != POLV_CORE_SUCCESS)
 		goto FAIL;
 
-	polvc_kernels_link(context, k);
+	polvc_kernels_link(context, k); // add to list
 	*kernel = k;
 
 	return POLV_CORE_SUCCESS;
 
 FAIL:
-	polvc_kernels_destroy(k, 0);
+	polvc_kernels_destroy_kernel(k, 0); // failed; destroy
 	return res;
+}
+
+
+POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
+                                    const char *shader_filename, int nargs)
+{
+	return _kernel_create(kernel, shader_filename, nargs,
+	                      polvc_kernels_shader_new_from_spv);
+}
+
+
+POLVCoreResult polvCoreKernelCreateFromGLSL(POLVCoreKernel **kernel,
+                                            const char *shader_filename, int nargs)
+{
+	return _kernel_create(kernel, shader_filename, nargs,
+	                      polvc_kernels_shader_new_from_glsl);
+}
+
+
+POLVCoreResult polvCoreKernelCreateFromString(POLVCoreKernel **kernel,
+                                              const char *shader_str, int nargs)
+{
+	return _kernel_create(kernel, shader_str, nargs,
+	                      polvc_kernels_shader_new_from_string);
 }
 
 
@@ -711,7 +742,7 @@ void polvCoreKernelDestroy(POLVCoreKernel **kernel)
 	if (dev && dev->device != VK_NULL_HANDLE)
 		vkDeviceWaitIdle(dev->device);
 
-	polvc_kernels_destroy(*kernel, 1);
+	polvc_kernels_destroy_kernel(*kernel, 1);
 	*kernel = NULL;
 }
 
