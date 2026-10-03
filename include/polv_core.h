@@ -323,7 +323,7 @@ POLV_CORE_API POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_o
  **************************************************************/
 
 /**
- * @brief Creates a kernel from a SPIR-V binary, on the current context
+ * @brief Creates a kernel from a SPIR-V binary file, on the current context
  * 
  * @param kernel          (ret) the created kernel
  * @param shader_filename the shader filename
@@ -332,6 +332,18 @@ POLV_CORE_API POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_o
  */
 POLV_CORE_API POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel, const char *shader_filename, 
                                                   int nargs);
+
+/**
+ * @brief Creates a kernel from a raw SPIR-V binary, on the current context
+ * 
+ * @param kernel          (ret) the created kernel
+ * @param spirv_binary    the SPIR-V binary
+ * @param spirv_size      the size of the SPIR-V binary
+ * @param nargs           the number of kernel arguments
+ * @return                POLV_CORE_SUCCESS on success, or POLV_CORE_ERROR_* otherwise
+ */
+POLV_CORE_API POLVCoreResult polvCoreKernelCreateFromBinary(POLVCoreKernel **kernel, const uint32_t *spirv_binary, 
+                                                            size_t spirv_size, int nargs);
 
 /**
  * @brief Creates a kernel from a GLSL file, on the current context

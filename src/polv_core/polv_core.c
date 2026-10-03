@@ -637,11 +637,10 @@ POLVCoreResult polvCoreMemoryCopyH2H(const void *src, size_t src_offset, void *d
  *                                                            *
  **************************************************************/
 
-typedef int (*ShaderLoader)(POLVCoreDevice *, const char *, int);
+typedef int (*ShaderLoader)(POLVCoreDevice *dev, const void *source, size_t source_size);
 
-static POLVCoreResult _kernel_create(POLVCoreKernel **kernel,
-                                     const char *shader,
-                                     int nargs, ShaderLoader loader)
+static POLVCoreResult _kernel_create(POLVCoreKernel **kernel, const void *shader_source,
+                                     size_t shader_size, int nargs, ShaderLoader loader)
 {
 	POLVCoreContext *context;
 	POLVCoreDevice *dev;
@@ -652,7 +651,7 @@ static POLVCoreResult _kernel_create(POLVCoreKernel **kernel,
 	if (!polvc_runtime_state()->initialized)
 		return POLV_CORE_ERROR_NOT_INITIALIZED;
 
-	if (!kernel || !shader || nargs <= 0)
+	if (!kernel || !shader_source || !loader || nargs <= 0)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
 	*kernel = NULL;
@@ -665,7 +664,8 @@ static POLVCoreResult _kernel_create(POLVCoreKernel **kernel,
 	if (!dev)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
-	shader_id = loader(dev, shader, 0);
+	/* Create/load shader */
+	shader_id = loader(dev, shader_source, shader_size);
 	if (shader_id < 0)
 		return (POLVCoreResult) shader_id;
 
@@ -696,38 +696,86 @@ static POLVCoreResult _kernel_create(POLVCoreKernel **kernel,
 	if ((res = polvc_kernels_allocate_descriptor_set(k)) != POLV_CORE_SUCCESS)
 		goto FAIL;
 
-	polvc_kernels_link(context, k); // add to list
+	/* Add kernel to context list */
+	polvc_kernels_link(context, k);
+
 	*kernel = k;
 
 	return POLV_CORE_SUCCESS;
 
 FAIL:
-	polvc_kernels_destroy_kernel(k, 0); // failed; destroy
+	polvc_kernels_destroy_kernel(k, 0);
 	return res;
 }
 
 
-POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel,
-                                    const char *shader_filename, int nargs)
+static int shader_loader_spv_file(POLVCoreDevice *dev, const void *source, size_t source_size)
 {
-	return _kernel_create(kernel, shader_filename, nargs,
-	                      polvc_kernels_shader_new_from_spv);
+	(void) source_size;
+	return polvc_kernels_shader_new_from_spv_file(dev, (const char *) source, 0);
+}
+
+
+static int shader_loader_spv_raw(POLVCoreDevice *dev, const void *source, size_t source_size)
+{
+	return polvc_kernels_shader_new_from_spv_raw(dev, (const uint32_t *) source, source_size);
+}
+
+
+static int shader_loader_glsl_file(POLVCoreDevice *dev, const void *source, size_t source_size)
+{
+	(void) source_size;
+	return polvc_kernels_shader_new_from_glsl(dev, (const char *) source, 0);
+}
+
+
+static int shader_loader_string(POLVCoreDevice *dev, const void *source, size_t source_size)
+{
+	(void) source_size;
+	return polvc_kernels_shader_new_from_string(dev, (const char *) source, 0);
+}
+
+
+POLVCoreResult polvCoreKernelCreate(POLVCoreKernel **kernel, const char *shader_filename, int nargs)
+{
+	if (!shader_filename)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	return _kernel_create(kernel, shader_filename, 0, nargs, shader_loader_spv_file);
+}
+
+
+POLVCoreResult polvCoreKernelCreateFromBinary(POLVCoreKernel **kernel,
+                                              const uint32_t *spirv_binary, size_t spirv_size,
+                                              int nargs)
+{
+	if (!spirv_binary || spirv_size == 0)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	if (spirv_size % sizeof(uint32_t) != 0)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	return _kernel_create(kernel, spirv_binary, spirv_size, nargs, shader_loader_spv_raw);
 }
 
 
 POLVCoreResult polvCoreKernelCreateFromGLSL(POLVCoreKernel **kernel,
                                             const char *shader_filename, int nargs)
 {
-	return _kernel_create(kernel, shader_filename, nargs,
-	                      polvc_kernels_shader_new_from_glsl);
+	if (!shader_filename)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	return _kernel_create(kernel, shader_filename, 0, nargs, shader_loader_glsl_file);
 }
 
 
 POLVCoreResult polvCoreKernelCreateFromString(POLVCoreKernel **kernel,
                                               const char *shader_str, int nargs)
 {
-	return _kernel_create(kernel, shader_str, nargs,
-	                      polvc_kernels_shader_new_from_string);
+	if (!shader_str)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	return _kernel_create(kernel, shader_str, strlen(shader_str), nargs, shader_loader_string);
 }
 
 

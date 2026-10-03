@@ -35,8 +35,10 @@ extern "C"
 {
 #endif
 
-int  polvc_kernels_shader_new_from_spv(POLVCoreDevice *dev, const char *shader_filename,
-                                       int ignore);
+int  polvc_kernels_shader_new_from_spv_file(POLVCoreDevice *dev, const char *shader_filename,
+                                            int ignore);
+int  polvc_kernels_shader_new_from_spv_raw(POLVCoreDevice *dev, const uint32_t *code, 
+                                           size_t code_size);
 int  polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev, const char *shader_source_filename,
                                         int from_string);
 int  polvc_kernels_shader_new_from_string(POLVCoreDevice *dev, const char *shader_str,

@@ -52,6 +52,7 @@ static char *dup_string(const char *s)
 	return copy;
 }
 
+
 /* Reads an entire file into memory. */
 static POLVCoreResult read_file(const char *path, void **out, size_t *out_size, unsigned long typesize)
 {
@@ -106,6 +107,7 @@ static POLVCoreResult read_file(const char *path, void **out, size_t *out_size, 
 	*out_size = (size_t) n;
 	return POLV_CORE_SUCCESS;
 }
+
 
 static POLVCoreResult read_file_uint32(const char *path, uint32_t **out, size_t *out_size)
 {
@@ -190,36 +192,101 @@ static int _cache_enabled(void)
 }
 
 
-/* Creates a shader given its SPIR-V binary filename. If from_glsl==1,
- * it means that we are called by polvc_kernel_shader_new_from_glsl, 
- * therefore we should simply delete the SPIR-V binary after the 
- * compilation *only if* the POLV_CACHE envvar is set to 0.
- */
-int polvc_kernels_shader_new_from_spv(POLVCoreDevice *dev, const char *shader_filename,
-                                      int ignore)
+/* Generic function for shader creation */
+static int polvc_kernels_shader_create(POLVCoreDevice *dev, const uint32_t *code, size_t code_size,
+                                       const char *filename, char *cache_key)
 {
 	VkShaderModuleCreateInfo ci;
+	POLVCoreShader *s;
+	int id;
+
+	if (!dev || !code || code_size == 0)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	/* Vulkan expects SPIR-V code size in bytes, aligned to uint32_t words. */
+	if (code_size % sizeof(uint32_t) != 0)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	if (dev->nshaders >= POLV_SHADER_CACHE_SIZE)
+		return POLV_CORE_ERROR_SHADER;
+
+	id = dev->nshaders;
+	s = &dev->shader_cache[id];
+
+	memset(s, 0, sizeof(*s));
+
+	s->owner = dev;
+	s->cache_key = cache_key;
+
+	if (filename)
+	{
+		s->filename = dup_string(filename);
+		if (!s->filename)
+		{
+			memset(s, 0, sizeof(*s));
+			return POLV_CORE_ERROR_OUT_OF_MEMORY;
+		}
+	}
+
+	memset(&ci, 0, sizeof(ci));
+	ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	ci.codeSize = code_size;
+	ci.pCode = code;
+
+	if (vkCreateShaderModule(dev->device, &ci, NULL,
+	                         &s->compute_shader_module) != VK_SUCCESS)
+	{
+		free(s->filename);
+		memset(s, 0, sizeof(*s));
+		return POLV_CORE_ERROR_SHADER;
+	}
+
+	/* From this point, the shader owns filename and cache_key */
+	++dev->nshaders;
+
+	return id;
+}
+
+
+/* Creates a shader from an in-memory SPIR-V binary.
+ * code_size is the binary size in bytes.
+ */
+int polvc_kernels_shader_new_from_spv_raw(POLVCoreDevice *dev, const uint32_t *code, 
+                                          size_t code_size)
+{
+	if (!dev || !code || code_size == 0)
+		return POLV_CORE_ERROR_INVALID_ARGUMENT;
+
+	return polvc_kernels_shader_create(dev, code, code_size, NULL, NULL);
+}
+
+
+/* Creates a shader from a SPIR-V binary file. */
+int polvc_kernels_shader_new_from_spv_file(POLVCoreDevice *dev,
+                                           const char *shader_filename,
+                                           int ignore)
+{
 	uint32_t *code;
 	size_t code_size;
 	char *new_key;
-	POLVCoreShader *s;
-	int id;
 	POLVCoreResult res;
+	int id;
 
 	(void) ignore;
+
 	if (!dev || !shader_filename)
 		return POLV_CORE_ERROR_INVALID_ARGUMENT;
 
-	/* (1) Create the key */
+	/* (1) Create cache key */
 	new_key = make_shader_cache_key(shader_filename);
 	if (!new_key)
 		return POLV_CORE_ERROR_SHADER;
 
-	/* (2) Search the cache for the key; if found, return shader ID immediately */
+	/* (2) Return an already cached shader */
 	for (id = 0; id < dev->nshaders; ++id)
 	{
 		if (dev->shader_cache[id].cache_key &&
-			strcmp(dev->shader_cache[id].cache_key, new_key) == 0)
+		    strcmp(dev->shader_cache[id].cache_key, new_key) == 0)
 		{
 			free(new_key);
 			return id;
@@ -232,49 +299,29 @@ int polvc_kernels_shader_new_from_spv(POLVCoreDevice *dev, const char *shader_fi
 		return POLV_CORE_ERROR_SHADER;
 	}
 
-	/* (3) Shader was not cached; read it from disk */
+	/* (3) Read SPIR-V binary */
 	code = NULL;
 	code_size = 0;
-	if ((res = read_file_uint32(shader_filename, &code, &code_size)) 
-		!= POLV_CORE_SUCCESS)
+
+	res = read_file_uint32(shader_filename, &code, &code_size);
+	if (res != POLV_CORE_SUCCESS)
 	{
 		free(new_key);
 		return res;
 	}
 
-	/* (4) Create a new shader and cache it */
-	id = dev->nshaders;
-	s = &dev->shader_cache[id];
-	memset(s, 0, sizeof(*s));
-	
-	s->owner = dev;
-	s->filename = dup_string(shader_filename);
-	s->cache_key = new_key;
-
-	if (!s->filename)
-	{
-		free(code);
-		polvc_kernels_destroy_shader(dev, id);
-		return POLV_CORE_ERROR_OUT_OF_MEMORY;
-	}
-
-	/* (5) Create the shader module */
-	memset(&ci, 0, sizeof(ci));
-	ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	ci.codeSize = code_size;
-	ci.pCode = code;
-
-	if (vkCreateShaderModule(dev->device, &ci, NULL,
-	                         &s->compute_shader_module) != VK_SUCCESS)
-	{
-		free(code);
-		polvc_kernels_destroy_shader(dev, id);
-		return POLV_CORE_ERROR_SHADER;
-	}
+	/* (4) Create and cache Vulkan shader module */
+	id = polvc_kernels_shader_create(dev, code, code_size, shader_filename, new_key);
 
 	free(code);
-	++dev->nshaders;
 
+	if (id < 0)
+	{
+		free(new_key);
+		return id;
+	}
+
+	/* Success: ownership of new_key is now held by shader_cache[id] */
 	return id;
 }
 
@@ -581,7 +628,7 @@ int polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev,
 			return POLV_CORE_ERROR_SHADER;
 		}
 
-		ret = polvc_kernels_shader_new_from_spv(dev, tmp_path, 0);
+		ret = polvc_kernels_shader_new_from_spv_file(dev, tmp_path, 0);
 		unlink(tmp_path);
 
 		return ret;
@@ -611,7 +658,7 @@ int polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev,
 		if (_make_cache_path(spv_path, sizeof(spv_path), home,
 		                     cached_spv_hash, ".spv") &&
 		    access(spv_path, F_OK) == 0)
-			return polvc_kernels_shader_new_from_spv(dev, spv_path, 0);
+			return polvc_kernels_shader_new_from_spv_file(dev, spv_path, 0);
 	}
 
 	/*
@@ -681,7 +728,7 @@ int polvc_kernels_shader_new_from_glsl(POLVCoreDevice *dev,
 	 */
 	_write_cache_key(key_path, home, spv_hash);
 
-	ret = polvc_kernels_shader_new_from_spv(dev, spv_path, 0);
+	ret = polvc_kernels_shader_new_from_spv_file(dev, spv_path, 0);
 
 	if (from_string)
 		unlink(shader_source_filename);
